@@ -29,6 +29,8 @@ class Page:
     height: float
     tokens: list[Token] = field(default_factory=list)
     source: str = "text"
+    ocr_confidence: float | None = None  # mean over OCR words
+    dpi: float | None = None  # native resolution of the scanned image
 
 
 @dataclass
@@ -45,6 +47,7 @@ class PageInfo:
     page: int
     source: str
     ocr_confidence: float | None = None
+    dpi: float | None = None
 
 
 @dataclass
@@ -62,4 +65,6 @@ class ScoreReport:
 
 @dataclass
 class ParseOptions:
-    """Options for parse_score. Empty for now; later tickets add force_ocr etc."""
+    """Options for parse_score."""
+
+    force_ocr: bool = False

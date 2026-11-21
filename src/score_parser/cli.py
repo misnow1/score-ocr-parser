@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import parse_score
+from . import ParseOptions, parse_score
 from .clean import clean
 from .layout import first_system_labels, lines
 from .source import read_pages
@@ -18,18 +18,20 @@ def _parse(args: argparse.Namespace) -> int:
     for p in map(Path, args.paths):
         pdfs.extend(sorted(p.glob("*.pdf")) if p.is_dir() else [p])
     for pdf in pdfs:
-        report = parse_score(pdf)
+        report = parse_score(pdf, ParseOptions(force_ocr=args.force_ocr))
         (out / f"{pdf.stem}.json").write_text(json.dumps(report.to_dict(), indent=2) + "\n")
         print(
             f"{pdf.name}: {len(report.instrumentation)} instruments, "
             f"{len(report.unknown_labels)} unknown labels"
         )
+        for w in report.warnings:
+            print(f"  warning: {w}")
     return 0
 
 
 def _inspect(args: argparse.Namespace) -> int:
     """Print only. Never writes files (scores are unlicensed)."""
-    pages = read_pages(Path(args.path))
+    pages = read_pages(Path(args.path), force_ocr=args.force_ocr)
     if not 1 <= args.page <= len(pages):
         print(f"page {args.page} out of range (1-{len(pages)})", file=sys.stderr)
         return 1
@@ -54,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("parse", help="parse score PDFs and write JSON reports")
     p.add_argument("paths", nargs="+", help="PDF files or folders of PDFs")
     p.add_argument("--out", default="out", help="output directory (default: out)")
+    p.add_argument("--force-ocr", action="store_true", help="OCR every page, ignoring any text layer")
     p.set_defaults(func=_parse)
 
     i = sub.add_parser("inspect", help="print one page's tokens or layout to stdout")
@@ -62,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     view = i.add_mutually_exclusive_group()
     view.add_argument("--tokens", action="store_true", help="positioned words (default)")
     view.add_argument("--layout", action="store_true", help="label column and lines")
+    i.add_argument("--force-ocr", action="store_true", help="OCR the page, ignoring any text layer")
     i.set_defaults(func=_inspect)
 
     args = ap.parse_args(argv)

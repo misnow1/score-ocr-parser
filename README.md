@@ -11,11 +11,13 @@ uv sync
 uv run pytest
 ```
 
+OCR tests are macOS-only and are skipped elsewhere; CI runs them on a macOS runner.
+
 ## Usage
 
 ```
-uv run score-parser parse SCORE.pdf [FOLDER ...] --out out
-uv run score-parser inspect SCORE.pdf --page 1 [--tokens | --layout]
+uv run score-parser parse SCORE.pdf [FOLDER ...] --out out [--force-ocr]
+uv run score-parser inspect SCORE.pdf --page 1 [--tokens | --layout] [--force-ocr]
 ```
 
 - `parse` writes `<score>.json` per PDF into the output directory (default `out/`, git-ignored) and prints a one-line summary per score.
@@ -29,7 +31,9 @@ report = parse_score("SCORE.pdf")
 report.instrumentation, report.unknown_labels
 ```
 
-Current scope: text-layer PDFs. The report lists the instruments on the first system (full names), with:
+Scanned (image-only) pages are detected automatically (almost no text words plus a page-sized image) and read with Apple Vision OCR (macOS only, via pyobjc; installed on macOS only). OCR yields the same positioned words as a text layer. The embedded image is read at native resolution; pages under about 300 dpi are upscaled to 300 dpi. Recognition is accurate-level with language correction off and the alias table as custom vocabulary. `--force-ocr` (CLI) or `ParseOptions(force_ocr=True)` OCRs every page regardless of text layer. `report.pages` records each page's `source` (`text` or `ocr`), `ocr_confidence` and `dpi`; pages under 150 dpi or below 0.5 mean OCR confidence add entries to `report.warnings` (the CLI prints them). The text-layer path imports nothing macOS-specific, so it stays cross-platform.
+
+Current scope: text-layer PDFs and scans. The report lists the instruments on the first system (full names), with:
 
 - chairs, expanded from ranges ("1-4", "i & II");
 - doublings, from labels ("Flute (Oboe) 1-3") and from instruction text ("to Flute", "piccolo trpt"; a "Mute" marking is ignored). An instruction is attached to the staff label nearest to it vertically;

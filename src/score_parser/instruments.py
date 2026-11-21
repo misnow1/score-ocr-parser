@@ -163,3 +163,8 @@ def build_instrumentation(
                     d for d in doubled if d != entry.instrument and d not in entry.doublings
                 ]
     return list(entries.values()), unknown, list(warnings)
+
+
+def vocabulary() -> list[str]:
+    """Every alias, as a custom vocabulary for OCR."""
+    return sorted(_table())
