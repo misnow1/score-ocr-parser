@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pymupdf
 
+from .instruments import resolve
 from .models import Page, PageReason, Token
 
 # A page with at most this many words and a mostly-covering image is a scan.
@@ -14,6 +15,8 @@ TARGET_DPI = 300
 # Below this resolution, or this mean OCR confidence, results can't be trusted.
 MIN_USEFUL_DPI = 150
 MIN_CONFIDENCE = 0.5
+# Orientations tried on a scan: degrees clockwise the content is printed rotated.
+ROTATIONS = (0, 90, 270)
 
 
 def read_pages(path: Path, force_ocr: bool = False) -> list[Page]:
@@ -111,16 +114,106 @@ def _ocr_page(
             png = pix.tobytes("png")
         else:  # upscale by rendering the image region at the target dpi
             png = pg.get_pixmap(dpi=TARGET_DPI, clip=rect, alpha=False).tobytes("png")
-    tokens = recognise(png, rect, number)
-    confidences = [t.confidence for t in tokens if t.confidence is not None]
-    mean = sum(confidences) / len(confidences) if confidences else 0.0
+    tokens, mean, rotation = _best_orientation(png, rect, number, recognise)
+    width, height = (pg.rect.width, pg.rect.height) if rotation == 0 else (pg.rect.height, pg.rect.width)
     return Page(
         number,
-        pg.rect.width,
-        pg.rect.height,
+        width,
+        height,
         tokens,
         "ocr",
         ocr_confidence=mean,
         dpi=dpi,
         reason=reason,
+        rotation=rotation,
     )
+
+
+def _best_orientation(png: bytes, rect: pymupdf.Rect, number: int, recognise) -> tuple[list[Token], float, int]:
+    """OCR the image in each orientation and keep the best: most vocabulary hits
+    in the left half (where staff labels are), then most hits, then highest mean
+    confidence. Tokens come back upright; for a rotated scan they are in a frame
+    of the image's height by its width."""
+    best = None
+    for img in pg.get_images(full=True):
+        for rect in pg.get_image_rects(img[0]):
+            if best is None or rect.get_area() > best[1].get_area():
+                best = (img[0], rect)
+    return best
+
+
+def _ocr_page(
+    doc: pymupdf.Document,
+    pg: pymupdf.Page,
+    number: int,
+    image: tuple[int, pymupdf.Rect] | None,
+    reason: PageReason,
+) -> Page:
+    from .ocr import recognise  # macOS-only; imported lazily
+
+    if reason in ("pattern", "empty") or image is None:  # no usable image: render the page
+        rect, dpi = pg.rect, float(TARGET_DPI)
+        png = pg.get_pixmap(dpi=TARGET_DPI, alpha=False).tobytes("png")
+    else:
+        xref, rect = image
+        pix = pymupdf.Pixmap(doc, xref)
+        dpi = pix.width / (rect.width / 72)
+        if dpi >= TARGET_DPI:  # native resolution
+            if pix.colorspace is None or pix.n - pix.alpha > 3 or pix.alpha:
+                pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+            png = pix.tobytes("png")
+        else:  # upscale by rendering the image region at the target dpi
+            png = pg.get_pixmap(dpi=TARGET_DPI, clip=rect, alpha=False).tobytes("png")
+    tokens, mean, rotation = _best_orientation(png, rect, number, recognise)
+    width, height = (pg.rect.width, pg.rect.height) if rotation == 0 else (pg.rect.height, pg.rect.width)
+    return Page(
+        number,
+        width,
+        height,
+        tokens,
+        "ocr",
+        ocr_confidence=mean,
+        dpi=dpi,
+        reason=reason,
+        rotation=rotation,
+    )
+
+
+def _best_orientation(png: bytes, rect: pymupdf.Rect, number: int, recognise) -> tuple[list[Token], float, int]:
+    """OCR the image in each orientation; keep the one with the most vocabulary
+    hits in the left half (where staff labels are), then all hits, then the highest mean confidence. Tokens come back upright: for a
+    rotated scan they are in a frame of the image's height by its width."""
+    best = None
+    for rotation in ROTATIONS:
+        if rotation == 0:
+            upright, frame = png, rect
+        else:
+            upright, frame = _turn_upright(png, rect, rotation), pymupdf.Rect(0, 0, rect.height, rect.width)
+        tokens = recognise(upright, frame, number)
+        confidences = [t.confidence for t in tokens if t.confidence is not None]
+        mean = sum(confidences) / len(confidences) if confidences else 0.0
+        score = (*_vocabulary_hits(tokens, frame), mean)
+        if best is None or score > best[0]:
+            best = (score, tokens, mean, rotation)
+    return best[1], best[2], best[3]
+
+
+def _vocabulary_hits(tokens: list[Token], frame: pymupdf.Rect) -> tuple[int, int]:
+    """(hits in the left half, all hits): upright instrument words in the alias
+    table. Vision reads sideways and upside-down text too, so only words set
+    horizontally count, and staff labels sit left of the staves, so an
+    upside-down page finds its labels on the right."""
+    hits = [t for t in tokens if t.x1 - t.x0 > t.y1 - t.y0 and resolve(t.text)]
+    left = [t for t in hits if (t.x0 + t.x1) / 2 < frame.x0 + frame.width / 2]
+    return len(left), len(hits)
+
+
+def _turn_upright(png: bytes, rect: pymupdf.Rect, rotation: int) -> bytes:
+    """The PNG turned back from content printed `rotation` degrees clockwise,
+    at the same pixel density."""
+    pixel_width = pymupdf.Pixmap(png).width
+    scale = pixel_width / rect.width
+    turned = pymupdf.open()
+    page = turned.new_page(width=rect.height, height=rect.width)
+    page.insert_image(page.rect, stream=png, rotate=rotation)  # counter-clockwise
+    return page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False).tobytes("png")

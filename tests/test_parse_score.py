@@ -173,6 +173,23 @@ def test_glyph_words_spanning_several_fonts_do_not_become_labels():
     assert "Piano" in by_name(report)
 
 @macos_only
+@pytest.mark.parametrize("rotation", [90, 270])
+def test_rotated_scan_is_oriented_and_resolves_instruments(rotation):
+    report = parse_score(FIXTURES / f"scan_rotated_{rotation}.pdf")
+
+    assert report.pages[0].rotation == rotation
+    found = by_name(report)
+    assert {"Alto Sax", "Tenor Sax", "Trumpet", "Trombone", "Piano"} <= set(found)
+    assert found["Trumpet"].chairs == [1, 2, 3, 4]
+    assert report.warnings == []
+
+
+@macos_only
+def test_upright_scan_reports_no_rotation():
+    assert parse_score(FIXTURES / "scan_300dpi.pdf").pages[0].rotation == 0
+
+
+@macos_only
 def test_pattern_fill_scan_is_rendered_and_ocrd():
     report = parse_score(FIXTURES / "scan_pattern.pdf")
 
