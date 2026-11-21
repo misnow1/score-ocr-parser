@@ -66,12 +66,61 @@ def finale_style(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+FULL = ["Alto Saxophone 1", "Trumpet in Bb 1-4", "Trombone 1-4", "Guitar", "Drums"]
+ABBR = ["A. Sx. 1", "Tpt. 1-4", "Tbn. 1-4", "Gtr.", "Dr."]
+STAFF_GAP = 30
+
+
+def ys_at(top: float, index: int) -> float:
+    return top + index * STAFF_GAP
+
+
+def _system(page, top, labels, music_font, texts) -> None:
+    """Draw one system (labels, rules, glyphs); texts are (x, y, string, fontsize)."""
+    for i, text in enumerate(labels):
+        y = ys_at(top, i)
+        page.insert_text((30, y), text, fontname="helv", fontsize=9)
+        page.draw_line((140, y), (580, y))
+        page.insert_text(
+            (150, y - 5), MUSIC_GLYPHS, fontfile=str(music_font), fontname="SynMusic", fontsize=14
+        )
+    for x, y, text, size in texts:
+        page.insert_text((x, y), text, fontname="helv", fontsize=size)
+
+
+def finale_solos(music_font: Path, out: Path) -> None:
+    """Two systems on page 1 and one on page 2, with solos, bars and rehearsal marks."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Tune Two", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7),
+        (150, 105, "VERSE", 10),
+        (400, 138, "Swing", 9),
+        (320, ys_at(150, 2) - 12, "TBN SOLO", 9),
+    ])
+    _system(p1, 400, ABBR, music_font, [
+        (150, 370, "17", 7), (200, 345, "B", 12),
+        (350, 388, "29ALTO SOLO", 9),
+        (250, ys_at(400, 3) - 12, "GUITAR SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, ABBR, music_font, [
+        (150, 120, "33", 7), (200, 105, "C", 12),
+        (200, ys_at(150, 4) - 12, "1x - Solo", 9),
+        (350, ys_at(150, 4) - 12, "vamp for drum feature", 9),
+        (250, ys_at(150, 3) - 12, "Male vocal solo", 9),
+    ])
+    doc.save(out)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         font = Path(tmp) / "SyntheticMusic.ttf"
         build_music_font(font)
         finale_style(font, OUT / "finale_full_labels.pdf")
+        finale_solos(font, OUT / "finale_solos.pdf")
 
 
 if __name__ == "__main__":

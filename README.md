@@ -29,7 +29,7 @@ report = parse_score("SCORE.pdf")
 report.instrumentation, report.unknown_labels
 ```
 
-Current scope: text-layer PDFs; the report lists the instruments on the first system, with chairs. Unrecognised labels go to `unknown_labels`. Music-font glyphs are removed before reading. The alias table and music-font list are editable data in `src/score_parser/data/`.
+Current scope: text-layer PDFs; the report lists the instruments on the first system, with chairs. Unrecognised labels go to `unknown_labels`. `report.features` lists every solo or feature marking ("ALTO SOLO", "1x - Solo", "Male vocal solo", "vamp for drum feature") with kind, instrument (from the text, else from the staff it sits on), page, nearest bar number, current rehearsal mark, raw text, confidence and reasons. Layout analysis finds systems (stacks of left-margin labels), staff bands, bar numbers and rehearsal marks (single capitals and section words listed in `data/rehearsal_words.yaml`), and splits glued tokens such as "29ALTO SOLO". Music-font glyphs are removed before reading. The alias table and music-font list are editable data in `src/score_parser/data/`.
 
 ## Licensing
 

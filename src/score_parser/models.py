@@ -47,10 +47,25 @@ class PageInfo:
 
 
 @dataclass
+class Feature:
+    """A solo or feature marking with its location."""
+
+    kind: str  # "solo" or "feature"
+    instrument: str | None
+    page: int
+    bar: int | None
+    rehearsal_mark: str | None
+    raw_text: str
+    confidence: float
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
 class ScoreReport:
     title: str
     title_source: str
     instrumentation: list[InstrumentEntry] = field(default_factory=list)
+    features: list[Feature] = field(default_factory=list)
     unknown_labels: list[str] = field(default_factory=list)
     pages: list[PageInfo] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
