@@ -7,6 +7,7 @@ label at the first big gap, glyph residue, chord symbol or time signature.
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cache
 
@@ -72,6 +73,12 @@ def _as_line(ln: list[Token]) -> TextLine:
 # --- cutting a line down to its label ---------------------------------------
 
 
+def _is_chord_or_glyph(text: str) -> bool:
+    """Whether a token reads as notation, not a label word: a chord symbol, or
+    glyph residue (a lone one- or two-letter word, or one letter repeated)."""
+    return _CHORD.match(text) is not None or _is_glyph_residue(text)
+
+
 def _ends_label(tok: Token, previous: Token, following: Token | None) -> bool:
     """Whether `tok` (not the first of its line) starts what follows a label:
     a time signature, a chord symbol or glyph residue."""
@@ -84,12 +91,12 @@ def _ends_label(tok: Token, previous: Token, following: Token | None) -> bool:
         return False
     if _CHORD.match(text):
         return True
-    if len(text) == 1 and text.isalpha() and text not in _CHAIR_LETTERS:
-        return True  # a notation glyph that came through as a letter
-    return len(text) == 1 and text.isalpha() and following is not None and following.text == text
+    if len(text) == 1 and text.isalpha():  # a letter that is not a chair numeral is a notation glyph
+        return text not in _CHAIR_LETTERS or (following is not None and following.text == text)
+    return False
 
 
-def _cut(row: list[Token]) -> list[Token]:
+def _label_prefix(row: list[Token]) -> list[Token]:
     """The leading tokens of a line that form a staff label."""
     label = [row[0]]
     for i in range(1, len(row)):
@@ -123,7 +130,8 @@ def _words(text: str) -> list[str]:
     return re.sub(r"[^a-z\s]", " ", text.lower()).split()
 
 
-def _header_key(text: str) -> str:
+def _words_key(text: str) -> str:
+    """`_words` joined: the form used to compare repeated lines and group words."""
     return " ".join(_words(text))
 
 
@@ -140,10 +148,9 @@ def _is_not_a_label(text: str) -> bool:
         return True  # nothing but numbers and punctuation
     filters = _filters()
     return (
-        _CHORD.match(text) is not None  # a lone chord symbol or letter
-        or _is_glyph_residue(text)
+        _is_chord_or_glyph(text)  # a lone chord symbol, letter or glyph
         or text.lower().strip(".") in filters["markings"]
-        or " ".join(words) in filters["group_words"]
+        or _words_key(text) in filters["group_words"]
         or filters["instruction_words"].intersection(words)
         or words[0] in ("score", "conductor")
         or words[0] in filters["header_words"]
@@ -156,7 +163,7 @@ def running_headers(pages: list[Page]) -> frozenset[str]:
     seen: dict[str, set[int]] = {}
     for page in pages:
         for ln in _text_lines(page):
-            key = _header_key(" ".join(t.text for t in _cut(ln)))
+            key = _words_key(" ".join(t.text for t in _label_prefix(ln)))
             if len(key.split()) >= MIN_HEADER_WORDS:
                 seen.setdefault(key, set()).add(page.number)
     return frozenset(k for k, nums in seen.items() if len(nums) >= MIN_HEADER_PAGES)
@@ -165,7 +172,9 @@ def running_headers(pages: list[Page]) -> frozenset[str]:
 # --- the label column -------------------------------------------------------
 
 
-def _edge_cluster(labels: list[list[Token]], edge) -> list[list[Token]]:
+def _edge_cluster(
+    labels: list[list[Token]], edge: Callable[[list[Token]], float]
+) -> list[list[Token]]:
     """The largest set of labels whose `edge` agrees to within the tolerance."""
     best: list[list[Token]] = []
     for anchor in labels:
@@ -175,7 +184,7 @@ def _edge_cluster(labels: list[list[Token]], edge) -> list[list[Token]]:
     return best
 
 
-def _column(labels: list[list[Token]]) -> list[list[Token]]:
+def _label_column(labels: list[list[Token]]) -> list[list[Token]]:
     """Labels that line up on a shared left or right edge, taking the best
     alignment first and repeating for labels left over that start inside the
     column (the first system often has a different edge from later ones)."""
@@ -198,12 +207,12 @@ def _column(labels: list[list[Token]]) -> list[list[Token]]:
 def _stack_labels(page: Page, headers: frozenset[str]) -> list[list[Token]]:
     labels = []
     for row in _text_lines(page):
-        label = _cut(row)
+        label = _label_prefix(row)
         text = " ".join(t.text for t in label)
-        if _is_not_a_label(text) or _header_key(text) in headers:
+        if _is_not_a_label(text) or _words_key(text) in headers:
             continue
         labels.append(label)
-    return _column(labels)
+    return _label_column(labels)
 
 
 def label_stacks(page: Page, headers: frozenset[str] = frozenset()) -> list[list[TextLine]]:
@@ -224,15 +233,27 @@ def label_stacks(page: Page, headers: frozenset[str] = frozenset()) -> list[list
     return stacks
 
 
+def label_tokens(stacks: list[list[TextLine]]) -> list[Token]:
+    """Every token that belongs to a staff label."""
+    return [t for stack in stacks for ln in stack for t in ln.tokens]
+
+
+def label_token_ids(stacks: list[list[TextLine]]) -> set[int]:
+    """Identities of the tokens that belong to a staff label."""
+    return {id(t) for t in label_tokens(stacks)}
+
+
+def lines_without(tokens: list[Token], ids: set[int]) -> list[list[Token]]:
+    """Visual lines of `tokens` with the tokens whose id is in `ids` removed;
+    lines left empty are dropped."""
+    return [rest for ln in lines(tokens) if (rest := [t for t in ln if id(t) not in ids])]
+
+
 def instruction_lines(page: Page, headers: frozenset[str] = frozenset()) -> list[TextLine]:
     """Text lines with the staff labels taken out (instructions, markings)."""
-    label_ids = {id(t) for stack in label_stacks(page, headers) for ln in stack for t in ln.tokens}
-    rows = []
-    for row in _text_lines(page):
-        rest = [t for t in row if id(t) not in label_ids]
-        if rest:
-            rows.append(_as_line(rest))
-    return rows
+    label_ids = label_token_ids(label_stacks(page, headers))
+    text_tokens = [t for row in _text_lines(page) for t in row]
+    return [_as_line(row) for row in lines_without(text_tokens, label_ids)]
 
 
 def first_system_labels(page: Page) -> list[str]:

@@ -5,10 +5,11 @@ Staff bands come from the label column at the left margin; each stack of labels
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cache
 
-from .layout import LINE_TOLERANCE, label_stacks, lines
+from .layout import LINE_TOLERANCE, label_stacks, label_token_ids, label_tokens, lines_without
 from .data import load
 from .models import Page, Token
 
@@ -75,31 +76,28 @@ def find_systems(page: Page, headers: frozenset[str] = frozenset()) -> list[Syst
     stacks = label_stacks(page, headers)
     if not stacks:
         return []
-    label_tokens = {id(t) for stack in stacks for ln in stack for t in ln.tokens}
-    other_rows = [
-        rest
-        for ln in lines(page.tokens)
-        if (rest := [t for t in ln if id(t) not in label_tokens])
-    ]
+    label_ids = label_token_ids(stacks)
+    other_rows = lines_without(page.tokens, label_ids)
     systems = [
         System(page.number, i, [Staff(ln.text, ln.yc) for ln in stack])
         for i, stack in enumerate(stacks)
     ]
-    label_right = max(t.x1 for stack in stacks for ln in stack for t in ln.tokens)
+    label_right = max(t.x1 for t in label_tokens(stacks))
+    is_page_number = _page_number_zone(page, label_right)
     for row in other_rows:
         owner = min(systems, key=lambda s: _distance(s, row[0].yc))
-        _place(owner, row, _page_number_zone(page, label_right))
+        _place(owner, row, is_page_number)
     return systems
 
 
-def _page_number_zone(page: Page, label_right: float):
+def _page_number_zone(page: Page, label_right: float) -> Callable[[str, float], bool]:
     """Whether a number at x0 sits where a page number does: in the label
     column or the right margin. Only a number equal to the page's own is dropped."""
 
-    def in_zone(text: str, x0: float) -> bool:
+    def is_page_number_here(text: str, x0: float) -> bool:
         return text == str(page.number) and (x0 < label_right or x0 > PAGE_NUMBER_MARGIN * page.width)
 
-    return in_zone
+    return is_page_number_here
 
 
 def _distance(system: System, yc: float) -> float:
@@ -110,7 +108,7 @@ def _distance(system: System, yc: float) -> float:
     return max(0.0, top - yc)
 
 
-def _place(system: System, row: list[Token], is_page_number) -> None:
+def _place(system: System, row: list[Token], is_page_number: Callable[[str, float], bool]) -> None:
     top = system.staves[0].yc
     for phrase in _phrases(row):
         yc = phrase[0].yc
