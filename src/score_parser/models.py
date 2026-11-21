@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Literal
 
 Source = Literal["text", "ocr"]
+# Why a page was read the way it was (see source.classify_page).
+PageReason = Literal["text", "image", "pattern", "empty"]
 TitleSource = Literal["filename", "page 1"]
 # A feature's kind: "solo" for solo wording, "feature" for "feature" wording
 # (a featured passage). The glossary's Feature is both kinds.
@@ -39,6 +41,7 @@ class Page:
     source: Source = "text"
     ocr_confidence: float | None = None  # mean over OCR words
     dpi: float | None = None  # native resolution of the scanned image
+    reason: PageReason = "text"
 
 
 @dataclass
@@ -56,6 +59,7 @@ class PageInfo:
     source: Source
     ocr_confidence: float | None = None
     dpi: float | None = None
+    reason: PageReason = "text"
 
 
 @dataclass

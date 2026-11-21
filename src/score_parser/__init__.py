@@ -21,6 +21,8 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
     pages = [clean(p) for p in read_pages(path, force_ocr=options.force_ocr)]
     instrumentation = build_instrumentation(pages)
     warnings = [w for p in pages for w in scan_warnings(p)] + instrumentation.warnings
+    if not instrumentation.entries:
+        warnings.append("no instrumentation found: the first system's labels could not be read")
     title, title_source = score_title(path, pages)
     features, feature_warnings = find_features(pages, instrumentation.first_chairs)
     warnings += feature_warnings
@@ -36,6 +38,6 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
         features=features,
         flow=build_flow(features),
         unknown_labels=instrumentation.unknown_labels,
-        pages=[PageInfo(p.number, p.source, p.ocr_confidence, p.dpi) for p in pages],
+        pages=[PageInfo(p.number, p.source, p.ocr_confidence, p.dpi, p.reason) for p in pages],
         warnings=warnings,
     )

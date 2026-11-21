@@ -171,3 +171,40 @@ def test_glyph_words_spanning_several_fonts_do_not_become_labels():
 
     assert report.unknown_labels == ["Zorblax Section"]
     assert "Piano" in by_name(report)
+
+@macos_only
+def test_pattern_fill_scan_is_rendered_and_ocrd():
+    report = parse_score(FIXTURES / "scan_pattern.pdf")
+
+    page = report.pages[0]
+    assert page.source == "ocr"
+    assert page.reason == "pattern"
+    assert {"Alto Sax", "Trumpet", "Piano"} <= set(by_name(report))
+    assert report.warnings == []
+
+
+def test_text_page_reports_text_reason():
+    report = parse_score(FIXTURES / "finale_full_labels.pdf")
+
+    assert report.pages[0].reason == "text"
+
+
+def test_empty_page_and_empty_instrumentation_warn(tmp_path, monkeypatch):
+    import types
+
+    import pymupdf
+
+    blank = tmp_path / "blank.pdf"
+    doc = pymupdf.open()
+    doc.new_page()
+    doc.save(blank)
+    # OCR is macOS-only; stand in for it so this runs everywhere.
+    stub = types.SimpleNamespace(recognise=lambda png, rect, page: [])
+    monkeypatch.setitem(sys.modules, "score_parser.ocr", stub)
+
+    report = parse_score(blank)
+
+    assert report.pages[0].source == "ocr"
+    assert report.pages[0].reason == "empty"
+    assert any("page 1" in w and "no text" in w for w in report.warnings)
+    assert any("instrumentation" in w for w in report.warnings)

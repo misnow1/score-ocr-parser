@@ -203,6 +203,29 @@ def scanned(src: Path, out: Path, dpi: int) -> None:
     scan.save(out, deflate=True)
 
 
+def pattern_scanned(src: Path, out: Path, dpi: int = 300) -> None:
+    """A scan drawn as a tiling-pattern fill: no image on the page, no text layer."""
+    with pymupdf.open(src) as doc:
+        pix = doc[0].get_pixmap(dpi=dpi, alpha=False)
+        rect = doc[0].rect
+    w, h = rect.width, rect.height
+    scan = pymupdf.open()
+    page = scan.new_page(width=w, height=h)
+    image = page.insert_image(rect, stream=pix.tobytes("png"))
+    pattern = scan.get_new_xref()
+    scan.update_object(
+        pattern,
+        f"<< /Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 "
+        f"/BBox [0 0 {w} {h}] /XStep {w} /YStep {h} "
+        f"/Resources << /XObject << /Im0 {image} 0 R >> >> >>",
+    )
+    scan.update_stream(pattern, f"q {w} 0 0 {h} 0 0 cm /Im0 Do Q".encode())
+    # Replace the page's own image drawing with a pattern-filled rectangle.
+    scan.update_stream(page.get_contents()[0], f"/Pattern cs /P0 scn 0 0 {w} {h} re f".encode())
+    scan.xref_set_key(page.xref, "Resources", f"<< /Pattern << /P0 {pattern} 0 R >> >>")
+    scan.save(out, deflate=True)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
@@ -239,6 +262,7 @@ def main() -> None:
         finale_solos(font, OUT / "finale_solos.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
+    pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")
 
 
 if __name__ == "__main__":
