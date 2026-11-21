@@ -1,0 +1,14 @@
+# PLACEHOLDER: approved facts for the real local score corpus.
+#
+# This file is intentionally empty of facts. Add an entry only after the
+# user has approved it by hand. Facts are short and contain no music content:
+# instrument names and approximate bar numbers, nothing else.
+#
+# Shape (keys are PDF file stems; see README.md, "Corpus tests"):
+#
+# scores:
+#   <pdf file name without .pdf>:
+#     instruments: [Alto Sax, Drums]      # canonical names that must be present
+#     features:                            # solos/features that must be found
+#       - {instrument: Alto Sax, bar: 29, tolerance: 4}
+scores: {}

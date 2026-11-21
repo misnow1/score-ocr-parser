@@ -20,7 +20,7 @@ uv run score-parser parse SCORE.pdf [FOLDER ...] --out out [--format json|yaml|b
 uv run score-parser inspect SCORE.pdf --page 1 [--tokens | --layout] [--force-ocr]
 ```
 
-- `parse` writes, per PDF, the JSON report `<score>.json` and/or the flow draft `<name>.yaml` into the output directory (default `out/`, git-ignored), chosen by `--format` (`json` default, `yaml`, or `both`), and prints a one-line summary per score.
+- `parse` writes, per PDF, the JSON report `<score>.json` and/or the flow draft `<name>.yaml` into the output directory (default `out/`, git-ignored), chosen by `--format` (`json` default, `yaml`, or `both`), and prints a summary table (see Folder runs).
 - `inspect` prints one page's cleaned tokens (default) or the label column and lines to stdout. It never writes files.
 
 Library use:
@@ -50,6 +50,28 @@ Flow draft (`--format yaml`, or `report.flow`): a `flow:` block in the shape mic
 Title: the filename with noise removed ("SCORE", dates, years, "AJC", "copy", "(1)" and similar); if nothing is left, the largest text on page 1. `report.title_source` says which (`filename` or `page 1`).
 
 `--numbers-dir DIR` (or `ParseOptions(numbers_dir=...)`) points at the planner's `numbers/` folder, which is only read. The title is fuzzy-matched (rapidfuzz) against the slugs, each file's `title:` and the known aliases in `data/title_aliases.yaml` (First Noel = First Nowell, Superstition = Super Christmas). A match names the draft `<slug>.yaml` (`report.matched_slug`). With no match the draft is named `UNMATCHED-<title-slug>.yaml` and starts with an `UNMATCHED` comment. Without `--numbers-dir` the draft is named for the title slug. `parse` refuses an output directory inside the numbers directory, so it never writes into the planner repo.
+
+Folder runs: `parse` accepts folders (every `*.pdf` in them) and files together. After the run it prints a summary table with one row per score: instrument count, feature count and warning count, so charts that need a manual look stand out. Warning text goes to stderr. A score that fails to parse does not stop the run: its row shows `FAILED`, the error goes to stderr, and the exit code is 1 (0 when every score parsed).
+
+## Corpus tests
+
+`tests/corpus/` holds opt-in tests against the real local score folder. They are skipped unless `SCORE_CORPUS_DIR` is set, and are never run in CI:
+
+```
+SCORE_CORPUS_DIR=/path/to/scores uv run pytest tests/corpus
+```
+
+The scores are read in place; nothing is copied or written. One test checks that every PDF in the folder parses. The others compare each score with the approved facts in `tests/corpus/expected.yaml`. That file ships as an empty placeholder. To add facts, first get the user's approval for each one, then add an entry keyed by the PDF file name without `.pdf`:
+
+```yaml
+scores:
+  some-score-file-stem:
+    instruments: [Alto Sax, Drums]   # canonical names that must be present
+    features:                         # a feature for this instrument within `tolerance` bars of `bar`
+      - {instrument: Alto Sax, bar: 29, tolerance: 4}
+```
+
+Facts stay short and hold no music content: instrument names and approximate bar numbers only.
 
 ## Licensing
 
