@@ -46,3 +46,28 @@ def test_non_solo_text_is_not_reported():
     report = parse_score(FIXTURES / "finale_solos.pdf")
 
     assert not any("swing" in f.raw_text.lower() for f in report.features)
+
+
+def test_repeated_solo_merges_into_one_feature_with_its_locations():
+    report = parse_score(FIXTURES / "finale_repeated_solos.pdf")
+
+    got = [(f.kind, f.instrument, f.page, f.bar) for f in report.features]
+    assert sorted(got, key=str) == sorted(
+        [
+            ("solo", "Alto Sax", 1, 9),  # five copies on one system, a reminder on the next
+            ("solo", "Trombone", 1, 1),
+            ("solo", "Trombone", 2, 33),  # top staff in its own stack, copies below it
+            ("solo", "Alto Sax", 3, 49),  # a system without the solo in between: new feature
+            ("solo", "Guitar", 3, 49),  # bare SOLO; the page number is not a bar
+        ],
+        key=str,
+    )
+    alto = next(f for f in report.features if f.instrument == "Alto Sax" and f.page == 1)
+    assert [(loc.page, loc.bar) for loc in alto.locations] == [(1, 9), (1, 17)]
+
+
+def test_chord_symbols_are_stripped_from_phrases():
+    report = parse_score(FIXTURES / "finale_repeated_solos.pdf")
+
+    assert not any("G7" in f.raw_text for f in report.features)
+    assert feature_at(report, "TBN SOLO").raw_text == "TBN SOLO"

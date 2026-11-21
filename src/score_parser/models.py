@@ -63,8 +63,16 @@ class PageInfo:
 
 
 @dataclass
+class Location:
+    """Where a feature is marked: its first appearance and any reminders."""
+
+    page: int
+    bar: int | None
+
+
+@dataclass
 class Feature:
-    """A solo or feature marking with its location."""
+    """A solo or feature, with its locations (`page` and `bar` are the first)."""
 
     kind: FeatureKind
     instrument: str | None
@@ -74,6 +82,7 @@ class Feature:
     raw_text: str
     confidence: float
     reasons: list[str] = field(default_factory=list)
+    locations: list[Location] = field(default_factory=list)
 
 
 @dataclass

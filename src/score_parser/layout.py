@@ -27,6 +27,7 @@ _TIME_SIGNATURE = re.compile(r"^(?:\d{1,2}/\d{1,2}|(?:[2-9]|1[0-2])[248])$")
 _CHORD = re.compile(
     r"^[A-G][#b♭♯]?(?:maj|min|dim|aug|sus|add|m|M|\+|°|ø)?\d*(?:[#b♭♯(]\d+\)?)*(?:/[A-G][#b♭♯]?)?$"
 )
+_BARE_ROOT = re.compile(r"^[A-G][#b♭♯]?$")
 _CONNECTORS = frozenset({"&", "-", "–", ",", "+"})  # between chairs: "1 & 2"
 _CHAIR_LETTERS = frozenset("iIvVxX")  # roman numeral chairs
 
@@ -102,6 +103,12 @@ def _cut(row: list[Token]) -> list[Token]:
     return label
 
 
+def is_chord_symbol(text: str) -> bool:
+    """A chord symbol with a quality, number or bass ("F6", "G7", "Cm", "D/F#").
+    A bare root ("B", "Bb") is not: it may be a rehearsal mark or a transposition."""
+    return _CHORD.match(text) is not None and _BARE_ROOT.match(text) is None
+
+
 # --- headers, footers and group labels --------------------------------------
 
 
@@ -137,6 +144,7 @@ def _is_not_a_label(text: str) -> bool:
         or _is_glyph_residue(text)
         or text.lower().strip(".") in filters["markings"]
         or " ".join(words) in filters["group_words"]
+        or filters["instruction_words"].intersection(words)
         or words[0] in ("score", "conductor")
         or words[0] in filters["header_words"]
         or len(text.split()) > MAX_LABEL_WORDS

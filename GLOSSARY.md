@@ -20,6 +20,8 @@
 - **Unknown label**: a staff label the alias table cannot resolve. Reported, never guessed.
 - **Doubling**: a second instrument a player picks up.
 - **Feature**: a solo or featured passage. In code `Feature.kind` is `solo` (solo wording) or `feature` (the word "feature"), so "feature" means both the whole class and one kind of it.
+- **Candidate**: one solo or feature wording on one system, with its x position, before copies are merged.
+- **Location**: a page and bar where a feature is marked. A feature has its first appearance and any reminders (copies printed above every staff, and the same marking on the next system or page, merge into one feature).
 - **Flow step**: one entry of the draft `flow:` block in the planner's shape (`section`, `instrument`, `note`), built from a feature.
 - **Draft**: the flow-step file written by `--format yaml`. Named for the planner slug, else `UNMATCHED-<title-slug>`.
 - **Planner number**: a `numbers/<slug>.yaml` file in the mic-assignment planner. Read-only for this tool.

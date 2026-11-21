@@ -28,3 +28,7 @@ header_words:
   - composed
   - www
 markings: [pp, p, mp, mf, f, ff, fff, sfz, fp, cresc, dim, rit, solo, vamp]
+# `instruction_words`: a line containing one of these is a solo marking printed
+# above the staves ("TBN SOLO"), never a staff label. Printed over every staff
+# at one x, such copies would otherwise outvote the real label column.
+instruction_words: [solo, solos, feature]

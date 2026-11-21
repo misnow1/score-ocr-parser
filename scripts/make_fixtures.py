@@ -190,6 +190,36 @@ def finale_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def repeated_solos(music_font: Path, out: Path) -> None:
+    """A solo printed above every staff, reminders on later systems, a chord
+    symbol in front of a solo, page numbers in the margin and a system split in
+    two stacks (the top staff alone, so the bar row sits above that stack)."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Repeat Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7),
+        *[(320, ys_at(150, i) - 12, "ALTO SOLO", 9) for i in range(5)],
+        (200, ys_at(150, 2) - 12, "G7 TBN SOLO", 9),
+    ])
+    _system(p1, 400, ABBR, music_font, [
+        (150, 370, "17", 7), (180, ys_at(400, 0) - 12, "ALTO SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 120, ABBR[:1], music_font, [
+        (150, 100, "33", 7), (300, 108, "TBN SOLO", 9),
+    ])
+    _system(p2, 231, ABBR[2:], music_font, [
+        *[(300, ys_at(231, i) - 12, "TBN SOLO", 9) for i in range(3)],
+    ])
+    p3 = doc.new_page(width=612, height=792)
+    _system(p3, 150, ABBR, music_font, [
+        (150, 120, "49", 7), (20, 120, "3", 7),
+        (320, ys_at(150, 0) - 12, "ALTO SOLO", 9),
+        (100, ys_at(150, 3) - 12, "SOLO", 9),
+    ])
+    doc.save(out)
+
 
 RA_CUE = ["Piano", "Bass", "Drum Set"]
 RA_FULL = [
@@ -318,6 +348,7 @@ def main() -> None:
         )
         finale_solos(font, OUT / "finale_solos.pdf")
         right_aligned(font, OUT / "finale_right_aligned.pdf")
+        repeated_solos(font, OUT / "finale_repeated_solos.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")

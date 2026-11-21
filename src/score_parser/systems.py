@@ -14,6 +14,7 @@ from .models import Page, Token
 
 PHRASE_GAP = 20.0  # horizontal gap that separates two annotations on one line
 X_SLACK = 2.0  # horizontal tolerance when comparing positions
+PAGE_NUMBER_MARGIN = 0.9  # right margin starts at this fraction of the page width
 BAR_ROW_REACH = 60.0  # how far above the top staff a bar number may sit
 _NUMBER = re.compile(r"^\d{1,3}$")
 _CAPITAL = re.compile(r"^[A-Z]$")
@@ -84,10 +85,21 @@ def find_systems(page: Page, headers: frozenset[str] = frozenset()) -> list[Syst
         System(page.number, i, [Staff(ln.text, ln.yc) for ln in stack])
         for i, stack in enumerate(stacks)
     ]
+    label_right = max(t.x1 for stack in stacks for ln in stack for t in ln.tokens)
     for row in other_rows:
         owner = min(systems, key=lambda s: _distance(s, row[0].yc))
-        _place(owner, row)
+        _place(owner, row, _page_number_zone(page, label_right))
     return systems
+
+
+def _page_number_zone(page: Page, label_right: float):
+    """Whether a number at x0 sits where a page number does: in the label
+    column or the right margin. Only a number equal to the page's own is dropped."""
+
+    def in_zone(text: str, x0: float) -> bool:
+        return text == str(page.number) and (x0 < label_right or x0 > PAGE_NUMBER_MARGIN * page.width)
+
+    return in_zone
 
 
 def _distance(system: System, yc: float) -> float:
@@ -98,7 +110,7 @@ def _distance(system: System, yc: float) -> float:
     return max(0.0, top - yc)
 
 
-def _place(system: System, row: list[Token]) -> None:
+def _place(system: System, row: list[Token], is_page_number) -> None:
     top = system.staves[0].yc
     for phrase in _phrases(row):
         yc = phrase[0].yc
@@ -106,7 +118,9 @@ def _place(system: System, row: list[Token]) -> None:
             system.bars.append((phrase[0].x0, int(phrase[0].text)))  # glued "29ALTO SOLO"
             phrase = phrase[1:]
         elif len(phrase) == 1 and _NUMBER.match(phrase[0].text):
-            if top - BAR_ROW_REACH <= yc <= top:
+            if top - BAR_ROW_REACH <= yc <= top and not is_page_number(
+                phrase[0].text, phrase[0].x0
+            ):
                 system.bars.append((phrase[0].x0, int(phrase[0].text)))
             continue
         text = " ".join(t.text for t in phrase)
