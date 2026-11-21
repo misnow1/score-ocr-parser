@@ -1,0 +1,18 @@
+# Section words that count as rehearsal marks (matched case-insensitively, whole
+# phrase). Single capital letters are always rehearsal marks.
+rehearsal_words:
+  - intro
+  - verse
+  - chorus
+  - bridge
+  - interlude
+  - outro
+  - coda
+  - tag
+  - head
+  - shout
+  - soli
+  - break
+  - ending
+  - vamp
+  - refrain

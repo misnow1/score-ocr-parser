@@ -22,6 +22,7 @@ def _parse(args: argparse.Namespace) -> int:
         (out / f"{pdf.stem}.json").write_text(json.dumps(report.to_dict(), indent=2) + "\n")
         print(
             f"{pdf.name}: {len(report.instrumentation)} instruments, "
+            f"{len(report.features)} features, "
             f"{len(report.unknown_labels)} unknown labels"
         )
         for w in report.warnings:

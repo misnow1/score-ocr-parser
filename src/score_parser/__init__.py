@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from .clean import clean
+from .features import find_features
 from .instruments import build_instrumentation
 from .models import PageInfo, ParseOptions, ScoreReport
 from .source import read_pages, scan_warnings
@@ -21,6 +22,7 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
         title=path.stem,
         title_source="filename",
         instrumentation=instrumentation,
+        features=find_features(pages),
         unknown_labels=unknown,
         pages=[PageInfo(p.number, p.source, p.ocr_confidence, p.dpi) for p in pages],
         warnings=warnings,
