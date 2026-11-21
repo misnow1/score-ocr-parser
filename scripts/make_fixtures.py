@@ -260,6 +260,22 @@ def scanned(src: Path, out: Path, dpi: int) -> None:
     scan.save(out, deflate=True)
 
 
+def rotated_scan(src: Path, out: Path, rotation: int, dpi: int = 300) -> None:
+    """An image-only PDF whose pixels hold the content turned `rotation` degrees
+    clockwise, on a page with rotation entry 0 (as a sideways scan is stored)."""
+    with pymupdf.open(src) as doc:
+        pix = doc[0].get_pixmap(dpi=dpi, alpha=False)
+        w, h = doc[0].rect.width, doc[0].rect.height
+    turner = pymupdf.open()
+    tp = turner.new_page(width=h, height=w)
+    tp.insert_image(tp.rect, stream=pix.tobytes("png"), rotate=(360 - rotation) % 360)  # counter-clockwise
+    turned = tp.get_pixmap(matrix=pymupdf.Matrix(dpi / 72, dpi / 72), alpha=False)
+    scan = pymupdf.open()
+    page = scan.new_page(width=h, height=w)
+    page.insert_image(page.rect, stream=turned.tobytes("png"))
+    scan.save(out, deflate=True)
+
+
 def pattern_scanned(src: Path, out: Path, dpi: int = 300) -> None:
     """A scan drawn as a tiling-pattern fill: no image on the page, no text layer."""
     with pymupdf.open(src) as doc:
@@ -321,6 +337,8 @@ def main() -> None:
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")
+    for rotation in (90, 270):
+        rotated_scan(OUT / "finale_full_labels.pdf", OUT / f"scan_rotated_{rotation}.pdf", rotation)
 
 
 if __name__ == "__main__":

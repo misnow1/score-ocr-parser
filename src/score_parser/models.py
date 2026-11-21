@@ -42,6 +42,9 @@ class Page:
     ocr_confidence: float | None = None  # mean over OCR words
     dpi: float | None = None  # native resolution of the scanned image
     reason: PageReason = "text"
+    # Degrees clockwise the scanned content is printed rotated (0, 90 or 270).
+    # Tokens and width/height are already in the upright frame.
+    rotation: int = 0
 
 
 @dataclass
@@ -60,6 +63,7 @@ class PageInfo:
     ocr_confidence: float | None = None
     dpi: float | None = None
     reason: PageReason = "text"
+    rotation: int = 0
 
 
 @dataclass
