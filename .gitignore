@@ -12,3 +12,4 @@ __pycache__/
 # Committed synthetic fixtures only
 !tests/fixtures/synthetic/
 !tests/fixtures/synthetic/**
+.claude/worktrees/
