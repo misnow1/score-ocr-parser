@@ -37,6 +37,7 @@ class InstrumentEntry:
     family: str
     chairs: list[int]
     labels: list[str]
+    doublings: list[str] = field(default_factory=list)
 
 
 @dataclass

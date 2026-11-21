@@ -29,7 +29,15 @@ report = parse_score("SCORE.pdf")
 report.instrumentation, report.unknown_labels
 ```
 
-Current scope: text-layer PDFs; the report lists the instruments on the first system, with chairs. Unrecognised labels go to `unknown_labels`. Music-font glyphs are removed before reading. The alias table and music-font list are editable data in `src/score_parser/data/`.
+Current scope: text-layer PDFs. The report lists the instruments on the first system (full names), with:
+
+- chairs, expanded from ranges ("1-4", "i & II");
+- doublings, from labels ("Flute (Oboe) 1-3") and from instruction text ("to Flute", "piccolo trpt"; a "Mute" marking is ignored). An instruction is attached to the staff label nearest to it vertically;
+- non-standard instruments (violin, viola, cello, organ, guitars, lead vocal, flugelhorn, piccolo trumpet, and others in the alias table).
+
+Abbreviated labels on later systems ("A. Sx. 1", "Tbn. 1-4", "E.B.", "D. S.") are cross-checked against the first system. A label for an instrument or chair the first system lacks, or one that cannot be resolved, adds a message to `warnings`. Unresolved labels also go to `unknown_labels`, never guessed.
+
+Music-font glyphs are removed before reading: private-use characters, and any token set in a font listed in `music_fonts.yaml` (Sibelius Opus glyphs look like plain ASCII, so only the font name identifies them). The alias table (`aliases.yaml`) and music-font list are editable data in `src/score_parser/data/`.
 
 ## Licensing
 

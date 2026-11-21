@@ -1,6 +1,29 @@
 # Instrument alias table. Entries of `aliases` are matched case-insensitively
-# after stripping periods, transposition ("in Bb") and the chair range.
+# after stripping periods, transposition ("in Bb"), parenthesised doublings and
+# the chair range. Add new abbreviations here; no code change is needed.
+#
+# `bare_doubling: true` marks an instrument that counts as a doubling when its
+# name appears alone in instruction text ("piccolo trpt"). Any instrument is a
+# doubling after "to" ("to Flute").
 instruments:
+  - name: Flute
+    family: Woodwind
+    aliases: [flute, flutes, fl, flt]
+  - name: Piccolo
+    family: Woodwind
+    aliases: [piccolo, picc]
+  - name: Oboe
+    family: Woodwind
+    aliases: [oboe, ob]
+  - name: Clarinet
+    family: Woodwind
+    aliases: [clarinet, clarinets, clar, clt, cl]
+  - name: Bass Clarinet
+    family: Woodwind
+    aliases: [bass clarinet, b cl, bs cl]
+  - name: Soprano Sax
+    family: Saxophone
+    aliases: [soprano saxophone, soprano sax, soprano sx, s sx, s sax]
   - name: Alto Sax
     family: Saxophone
     aliases: [alto saxophone, alto sax, alto sx, a sx, a sax, alto]
@@ -9,10 +32,17 @@ instruments:
     aliases: [tenor saxophone, tenor sax, tenor sx, t sx, t sax, tenor]
   - name: Baritone Sax
     family: Saxophone
-    aliases: [baritone saxophone, baritone sax, bari sax, bari sx, b sx, bari]
+    aliases: [baritone saxophone, baritone sax, bari sax, bari sx, bar sx, bar sax, b sx, bari]
   - name: Trumpet
     family: Trumpet
     aliases: [trumpet, trumpets, trpt, tpt, tpts, trp]
+  - name: Piccolo Trumpet
+    family: Trumpet
+    bare_doubling: true
+    aliases: [piccolo trumpet, piccolo trpt, piccolo tpt, picc trumpet, picc trpt, picc tpt]
+  - name: Flugelhorn
+    family: Trumpet
+    aliases: [flugelhorn, flugelhorns, flugel, flghn, flgh, flg]
   - name: Trombone
     family: Trombone
     aliases: [trombone, trombones, tbn, tbns, tromb]
@@ -22,12 +52,30 @@ instruments:
   - name: Piano
     family: Rhythm
     aliases: [piano, pno, pf]
+  - name: Organ
+    family: Rhythm
+    aliases: [organ, org]
   - name: Guitar
     family: Rhythm
     aliases: [guitar, gtr]
   - name: Bass
     family: Rhythm
-    aliases: [bass, double bass, acoustic bass, bs]
+    aliases: [bass, double bass, acoustic bass, upright bass, bs]
+  - name: Electric Bass
+    family: Rhythm
+    aliases: [electric bass, bass guitar, e bass, e b, eb]
   - name: Drums
     family: Rhythm
-    aliases: [drums, drum set, drumset, dr, dm]
+    aliases: [drums, drum set, drumset, drum kit, d s, dr, dm]
+  - name: Violin
+    family: Strings
+    aliases: [violin, violins, vln, vl]
+  - name: Viola
+    family: Strings
+    aliases: [viola, violas, vla]
+  - name: Cello
+    family: Strings
+    aliases: [cello, cellos, violoncello, vc, vcl]
+  - name: Lead Vocal
+    family: Vocal
+    aliases: [lead vocal, lead vocals, lead voc, l voc, lead vox, vocal, vocals, voc, vox]
