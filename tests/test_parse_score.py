@@ -115,6 +115,27 @@ def test_later_systems_that_disagree_with_first_system_raise_warnings():
     assert "Violin" not in by_name(report)
 
 
+def test_instrument_missing_from_first_system_but_recurring_does_not_warn():
+    report = parse_score(FIXTURES / "sibelius_later_only_instrument.pdf")
+
+    text = "\n".join(report.warnings)
+    found = by_name(report)
+    assert set(found) == {"Alto Sax", "Trumpet", "Trombone", "Piano", "Guitar", "Drums", "Bass"}
+    assert found["Bass"].labels == ["Bass", "E.B."]
+    assert "Bass" not in text and "E.B." not in text
+    # Warnings that are still useful: a one-off instrument, an unknown label, a chair outside the range.
+    assert "Vln." in text and "Zork." in text and "Tbn. 1-5" in text
+    assert "Violin" not in found
+
+
+def test_bass_and_electric_bass_are_one_instrument_for_the_cross_check():
+    report = parse_score(FIXTURES / "sibelius_bass_variant.pdf")
+
+    assert [i.instrument for i in report.instrumentation] == ["Alto Sax", "Electric Bass", "Drums"]
+    assert "Bass" in by_name(report)["Electric Bass"].labels
+    assert report.warnings == []
+
+
 # Scanned pages go through Apple Vision OCR, which only exists on macOS.
 macos_only = pytest.mark.skipif(sys.platform != "darwin", reason="Apple Vision OCR is macOS-only")
 

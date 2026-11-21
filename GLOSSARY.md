@@ -16,6 +16,8 @@
 - **Bar**: a measure, identified by the bar number printed above the top staff. A feature's bar is the nearest number at or left of its text.
 - **Rehearsal mark**: a single capital letter or a section word ("VERSE") above a system. A feature reports the latest mark at or before it.
 - **Instrumentation**: the instruments on the first system (full names), with chairs and doublings. Features may only name instruments in it.
+- **Recurring instrument**: an instrument the first system lacks that labels two or more later systems. It joins the instrumentation; a one-off later label for a missing instrument still warns.
+- **Instrument variant**: a canonical name that counts as the same instrument as another for the later-system cross-check (Bass and Electric Bass). One rule, `present_as`, data in `instrument_variants.yaml`.
 - **Chair**: a numbered seat within a section ("Trumpet 2"). Not an instrument.
 - **Canonical instrument**: the normalised name from the alias table ("Alto Sax").
 - **Unknown label**: a staff label the alias table cannot resolve. Reported, never guessed.

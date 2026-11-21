@@ -1,7 +1,8 @@
 """Interpret stage: staff label text to canonical instruments."""
 
 import re
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from functools import cache
 
 import pymupdf
@@ -40,6 +41,21 @@ def _table() -> dict[str, tuple[str, str]]:
 def _bare_doubling_aliases() -> list[tuple[str, str]]:
     pairs = [(a, i["name"]) for i in _data() if i.get("bare_doubling") for a in i["aliases"]]
     return sorted(pairs, key=lambda p: -len(p[0]))
+
+
+@cache
+def _variant_groups() -> list[frozenset[str]]:
+    return [frozenset(g) for g in load("instrument_variants.yaml")["variants"]]
+
+
+def present_as(name: str, present: Iterable[str]) -> str | None:
+    """The instrument in `present` that `name` counts as: itself, else a
+    canonical-name variant of it (Bass and Electric Bass), else None. The one
+    rule for variants."""
+    present = list(present)
+    if name in present:
+        return name
+    return next((p for g in _variant_groups() if name in g for p in present if p in g), None)
 
 
 def _normalise(text: str) -> str:
@@ -119,6 +135,9 @@ def resolve_against_first_system(label: str, first_chairs: dict[str, set[int]]) 
     hit = resolve(label)
     if hit is None:
         return LabelCheck(None, f"label '{label}' is not recognised")
+    same = present_as(hit.name, first_chairs)
+    if same is not None:
+        hit = replace(hit, name=same)
     if hit.name not in first_chairs:
         return LabelCheck(
             hit, f"label '{label}' ({hit.name}) is not in the first-system instrumentation"
@@ -157,6 +176,29 @@ def _first_system(stacks: list[tuple[int, list[TextLine]]]) -> int:
     return max(candidates, key=lambda i: (score(i), -i))
 
 
+def _recurring_names(
+    first_chairs: dict[str, set[int]], later: list[tuple[int, list[TextLine]]]
+) -> list[str]:
+    """Instruments the first system lacks that label two or more later systems:
+    a normal instrument of the score, not a stray label. Variants of one
+    instrument count together, named by their first appearance."""
+    systems_of: dict[str, int] = {}
+    names: list[str] = []
+    for _, stack in later:
+        seen: set[str] = set()
+        for line in stack:
+            hit = resolve(line.text)
+            if hit is None or present_as(hit.name, first_chairs):
+                continue
+            name = present_as(hit.name, names)
+            if name is None:
+                names.append(name := hit.name)
+            seen.add(name)
+        for name in seen:
+            systems_of[name] = systems_of.get(name, 0) + 1
+    return [n for n in names if systems_of[n] >= 2]
+
+
 def build_instrumentation(pages: list[Page]) -> Instrumentation:
     """First system's full names, cross-checked against abbreviated labels on
     later systems."""
@@ -186,9 +228,13 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
             add(line.text, hit)
 
     first_chairs = {name: set(e.chairs) for name, e in entries.items()}
-    for number, stack in (st for i, st in enumerate(stacks) if i != first):
+    later = [st for i, st in enumerate(stacks) if i != first]
+    recurring = _recurring_names(first_chairs, later)
+    for number, stack in later:
         for line in stack:
             check = resolve_against_first_system(line.text, first_chairs)
+            if check.hit and check.problem and (name := present_as(check.hit.name, recurring)):
+                check = LabelCheck(replace(check.hit, name=name), None)
             if check.hit is None and line.text not in unknown:
                 unknown.append(line.text)
             if check.problem:

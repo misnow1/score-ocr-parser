@@ -71,6 +71,7 @@ def sibelius_style(
     systems: list[list[str]],
     instructions: dict[str, str],
     out: Path,
+    tops: tuple[int, ...] = (110, 480),
 ) -> None:
     """Stacked systems of staff labels. Sibelius-style: the clef/rest glyphs are
     ordinary ASCII characters ('&', '?') set in an Opus-named font, so only the
@@ -80,9 +81,8 @@ def sibelius_style(
     page = doc.new_page(width=612, height=792)
     page.insert_text((200, 60), "Synthetic Tune", fontname="helv", fontsize=24)
     spacing = 36
-    tops = [110, 480]
-    for top, labels in zip(tops, systems):
-        page.insert_text((140, top - 14), "1" if top == tops[0] else "17", fontname="helv", fontsize=7)
+    for n, (top, labels) in enumerate(zip(tops, systems)):
+        page.insert_text((140, top - 14), str(1 + 16 * n), fontname="helv", fontsize=7)
         for i, text in enumerate(labels):
             y = top + i * spacing
             page.insert_text((30, y), text, fontname="helv", fontsize=9)
@@ -90,7 +90,7 @@ def sibelius_style(
                 (125, y), "&?", fontfile=str(opus_font), fontname="OpusStd", fontsize=14
             )
             page.draw_line((140, y), (580, y))
-            if top == tops[0] and text in instructions:
+            if n == 0 and text in instructions:
                 page.insert_text((200, y - 12), instructions[text], fontname="helv", fontsize=8)
     doc.save(out)
 
@@ -140,6 +140,14 @@ NONSTANDARD = ["Violin", "Viola", "Cello", "Organ", "Lead Vocal", "Flugelhorn"]
 NONSTANDARD_ABBREVIATED = ["Vln.", "Vla.", "Vc.", "Org.", "L. Voc.", "Flgh."]
 MISMATCH_FIRST = ["Alto Saxophone 1", "Trumpet in Bb 1-4", "Trombone 1-4", "Guitar", "Drums"]
 MISMATCH_LATER = ["A. Sx. 1", "Tpt. 1-4", "Tbn. 1-5", "Vln.", "Zork."]
+
+
+# The first system (most resolving labels) has no bass; two later systems do.
+LATER_ONLY_FIRST = ["Alto Saxophone 1", "Trumpet in Bb 1-4", "Trombone 1-4", "Piano", "Guitar", "Drums"]
+LATER_ONLY_SECOND = ["A. Sx. 1", "Tpt. 1-4", "Tbn. 1-4", "Bass"]
+LATER_ONLY_THIRD = ["A. Sx. 1", "Tpt. 1-4", "Tbn. 1-5", "E.B.", "Vln.", "Zork."]
+VARIANT_FIRST = ["Alto Saxophone 1", "Electric Bass", "Drums"]
+VARIANT_LATER = ["A. Sx. 1", "Bass", "Dr."]
 
 
 FULL = ["Alto Saxophone 1", "Trumpet in Bb 1-4", "Trombone 1-4", "Guitar", "Drums"]
@@ -361,6 +369,19 @@ def main() -> None:
             [MISMATCH_FIRST, MISMATCH_LATER],
             {},
             OUT / "sibelius_mismatch.pdf",
+        )
+        sibelius_style(
+            opus,
+            [LATER_ONLY_FIRST, LATER_ONLY_SECOND, LATER_ONLY_THIRD],
+            {},
+            OUT / "sibelius_later_only_instrument.pdf",
+            tops=(110, 330, 550),
+        )
+        sibelius_style(
+            opus,
+            [VARIANT_FIRST, VARIANT_LATER],
+            {},
+            OUT / "sibelius_bass_variant.pdf",
         )
         finale_solos(font, OUT / "finale_solos.pdf")
         right_aligned(font, OUT / "finale_right_aligned.pdf")
