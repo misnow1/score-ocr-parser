@@ -2,6 +2,13 @@
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Literal
+
+Source = Literal["text", "ocr"]
+TitleSource = Literal["filename", "page 1"]
+# A feature's kind: "solo" for solo wording, "feature" for "feature" wording
+# (a featured passage). The glossary's Feature is both kinds.
+FeatureKind = Literal["solo", "feature"]
 
 
 @dataclass
@@ -15,7 +22,7 @@ class Token:
     y1: float
     page: int
     font: str = ""
-    source: str = "text"
+    source: Source = "text"
     confidence: float | None = None
 
     @property
@@ -29,7 +36,7 @@ class Page:
     width: float
     height: float
     tokens: list[Token] = field(default_factory=list)
-    source: str = "text"
+    source: Source = "text"
     ocr_confidence: float | None = None  # mean over OCR words
     dpi: float | None = None  # native resolution of the scanned image
 
@@ -46,7 +53,7 @@ class InstrumentEntry:
 @dataclass
 class PageInfo:
     page: int
-    source: str
+    source: Source
     ocr_confidence: float | None = None
     dpi: float | None = None
 
@@ -55,7 +62,7 @@ class PageInfo:
 class Feature:
     """A solo or feature marking with its location."""
 
-    kind: str  # "solo" or "feature"
+    kind: FeatureKind
     instrument: str | None
     page: int
     bar: int | None
@@ -78,9 +85,10 @@ class FlowStep:
 @dataclass
 class ScoreReport:
     title: str
-    title_source: str
+    title_source: TitleSource
     matched_slug: str | None = None  # planner number slug, with numbers_dir
     draft_name: str = ""  # file stem for the flow draft
+    unmatched: bool = False  # numbers_dir was given and no slug matched
     instrumentation: list[InstrumentEntry] = field(default_factory=list)
     features: list[Feature] = field(default_factory=list)
     flow: list[FlowStep] = field(default_factory=list)

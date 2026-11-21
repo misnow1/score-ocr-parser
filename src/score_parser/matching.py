@@ -36,6 +36,16 @@ def _names_for(slug: str, numbers_dir: Path, aliases: dict[str, list[str]]) -> s
     return names
 
 
+def draft_name(title: str, slug: str | None, numbers_dir: Path | None) -> tuple[str, bool]:
+    """(file stem for the flow draft, unmatched). Unmatched means a numbers dir
+    was given but no slug matched, so the stem carries an UNMATCHED- prefix."""
+    if slug:
+        return slug, False
+    if numbers_dir:
+        return f"UNMATCHED-{slugify(title)}", True
+    return slugify(title), False
+
+
 def match_slug(title: str, numbers_dir: Path) -> str | None:
     """Slug of the planner number this title belongs to, or None. Read-only."""
     aliases = _known_aliases()

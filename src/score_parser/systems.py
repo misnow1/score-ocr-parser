@@ -13,6 +13,7 @@ from .data import load
 from .models import Page, Token
 
 PHRASE_GAP = 20.0  # horizontal gap that separates two annotations on one line
+X_SLACK = 2.0  # horizontal tolerance when comparing positions
 BAR_ROW_REACH = 60.0  # how far above the top staff a bar number may sit
 _NUMBER = re.compile(r"^\d{1,3}$")
 _CAPITAL = re.compile(r"^[A-Z]$")
@@ -44,11 +45,13 @@ class System:
         """The staff a text above a staff belongs to: the first one at or below it."""
         return next((s for s in self.staves if s.yc >= yc - LINE_TOLERANCE), self.staves[-1])
 
-    def bar_at(self, x: float) -> int | None:
-        before = [b for bx, b in self.bars if bx <= x + 2]
+    def bar_at(self, x: float) -> tuple[int | None, bool]:
+        """(bar number, certain). The last bar number at or left of x; when the
+        text sits left of every bar number, the first bar with certain False."""
+        before = [b for bx, b in self.bars if bx <= x + X_SLACK]
         if before:
-            return before[-1]
-        return self.bars[0][1] if self.bars else None
+            return before[-1], True
+        return (self.bars[0][1], False) if self.bars else (None, True)
 
 
 @cache

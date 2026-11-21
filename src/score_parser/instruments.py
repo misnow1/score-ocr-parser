@@ -10,7 +10,7 @@ from .models import InstrumentEntry, Page
 
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
 _NUM = r"(?:\d+|i{1,3}|iv|v)"
-_CHAIRS = re.compile(rf"\s+({_NUM}(?:\s*(?:-|–|&|,|and)\s*{_NUM})*)\s*$", re.I)
+_CHAIRS = re.compile(rf"(?:\s+|(?<=\.))({_NUM}(?:\s*(?:-|–|&|,|and)\s*{_NUM})*)\s*$", re.I)
 _CHAIR_PART = re.compile(rf"({_NUM})|(-|–)", re.I)
 _TRANSPOSITION = re.compile(r"\bin\s+[a-g][b#♭♯]?(?=\s|$)", re.I)
 _PARENS = re.compile(r"\(([^)]*)\)")
@@ -97,18 +97,60 @@ def _nearest(labels: list[TextLine], y: float) -> TextLine:
     return min(labels, key=lambda ln: abs(ln.yc - y))
 
 
-def build_instrumentation(
-    pages: list[Page],
-) -> tuple[list[InstrumentEntry], list[str], list[str]]:
-    """(instrumentation, unknown labels, warnings) from the first system's full
-    names, cross-checked against abbreviated labels on later systems."""
+@dataclass
+class LabelCheck:
+    """A staff label compared with the first system's instrumentation."""
+
+    hit: Resolved | None
+    problem: str | None  # why the label disagrees with the first system, or None
+
+    @property
+    def accepted(self) -> bool:
+        return self.hit is not None and self.problem is None
+
+
+def resolve_against_first_system(label: str, first_chairs: dict[str, set[int]]) -> LabelCheck:
+    """Resolve a staff label and cross-check it against the first system.
+
+    `first_chairs` maps each first-system instrument to its chairs. The one rule
+    for later-system labels and for labels that features take instruments from."""
+    hit = resolve(label)
+    if hit is None:
+        return LabelCheck(None, f"label '{label}' is not recognised")
+    if hit.name not in first_chairs:
+        return LabelCheck(
+            hit, f"label '{label}' ({hit.name}) is not in the first-system instrumentation"
+        )
+    if not set(hit.chairs) <= first_chairs[hit.name]:
+        return LabelCheck(
+            hit,
+            f"label '{label}' has chairs {hit.chairs} outside "
+            f"the first system's {sorted(first_chairs[hit.name])} for {hit.name}",
+        )
+    return LabelCheck(hit, None)
+
+
+@dataclass
+class Instrumentation:
+    entries: list[InstrumentEntry]
+    unknown_labels: list[str]
+    warnings: list[str]
+
+    @property
+    def first_chairs(self) -> dict[str, set[int]]:
+        return {e.instrument: set(e.chairs) for e in self.entries}
+
+
+def build_instrumentation(pages: list[Page]) -> Instrumentation:
+    """First system's full names, cross-checked against abbreviated labels on
+    later systems."""
     entries: dict[str, InstrumentEntry] = {}
     unknown: list[str] = []
     warnings: dict[str, None] = {}
 
     stacks = [(p.number, st) for p in pages for st in label_stacks(p)]
     if not stacks:
-        return [], [], []
+        return Instrumentation([], [], [])
 
     def add(label: str, hit: Resolved) -> InstrumentEntry:
         entry = entries.setdefault(hit.name, InstrumentEntry(hit.name, hit.family, [], [], []))
@@ -128,23 +170,13 @@ def build_instrumentation(
     first_chairs = {name: set(e.chairs) for name, e in entries.items()}
     for number, stack in stacks[1:]:
         for line in stack:
-            hit = resolve(line.text)
-            if hit is None:
-                if line.text not in unknown:
-                    unknown.append(line.text)
-                warnings[f"Page {number}: label '{line.text}' is not recognised"] = None
-            elif hit.name not in first_chairs:
-                warnings[
-                    f"Page {number}: label '{line.text}' ({hit.name}) is not in the "
-                    "first-system instrumentation"
-                ] = None
-            elif not set(hit.chairs) <= first_chairs[hit.name]:
-                warnings[
-                    f"Page {number}: label '{line.text}' has chairs {hit.chairs} outside "
-                    f"the first system's {sorted(first_chairs[hit.name])} for {hit.name}"
-                ] = None
+            check = resolve_against_first_system(line.text, first_chairs)
+            if check.hit is None and line.text not in unknown:
+                unknown.append(line.text)
+            if check.problem:
+                warnings[f"Page {number}: {check.problem}"] = None
             else:
-                add(line.text, hit)
+                add(line.text, check.hit)
 
     for page in pages:
         page_labels = [ln for n, st in stacks if n == page.number for ln in st]
@@ -158,7 +190,7 @@ def build_instrumentation(
                 entry.doublings += [
                     d for d in doubled if d != entry.instrument and d not in entry.doublings
                 ]
-    return list(entries.values()), unknown, list(warnings)
+    return Instrumentation(list(entries.values()), unknown, list(warnings))
 
 
 def vocabulary() -> list[str]:
