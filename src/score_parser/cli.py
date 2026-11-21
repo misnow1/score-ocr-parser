@@ -12,6 +12,14 @@ from .layout import first_system_labels, lines
 from .source import read_pages
 
 
+def _print_summary(rows: list[tuple[str, str, str, str]]) -> None:
+    """Per-score table: instrument count, feature count, warning count."""
+    header = ("score", "instruments", "features", "warnings")
+    width = max([len(r[0]) for r in rows] + [len(header[0])])
+    for r in [header, *rows]:
+        print(f"{r[0]:<{width}}  {r[1]:>11}  {r[2]:>8}  {r[3]:>8}")
+
+
 def _parse(args: argparse.Namespace) -> int:
     out = Path(args.out)
     numbers_dir = Path(args.numbers_dir) if args.numbers_dir else None
@@ -22,22 +30,31 @@ def _parse(args: argparse.Namespace) -> int:
     pdfs: list[Path] = []
     for p in map(Path, args.paths):
         pdfs.extend(sorted(p.glob("*.pdf")) if p.is_dir() else [p])
+    rows: list[tuple[str, str, str, str]] = []
+    failed = 0
     for pdf in pdfs:
-        report = parse_score(pdf, ParseOptions(force_ocr=args.force_ocr, numbers_dir=numbers_dir))
-        if args.format in ("json", "both"):
-            (out / f"{pdf.stem}.json").write_text(json.dumps(report.to_dict(), indent=2) + "\n")
-        if args.format in ("yaml", "both"):
-            header = ""
-            if report.draft_name.startswith("UNMATCHED-"):
-                header = f"UNMATCHED: no planner number matches the title {report.title!r}; name this file by hand."
-            (out / f"{report.draft_name}.yaml").write_text(render_yaml(report.flow, header))
-        print(
-            f"{pdf.name}: {len(report.instrumentation)} instruments, "
-            f"{len(report.features)} features, "
-            f"{len(report.unknown_labels)} unknown labels"
-        )
+        try:
+            report = parse_score(pdf, ParseOptions(force_ocr=args.force_ocr, numbers_dir=numbers_dir))
+            if args.format in ("json", "both"):
+                (out / f"{pdf.stem}.json").write_text(json.dumps(report.to_dict(), indent=2) + "\n")
+            if args.format in ("yaml", "both"):
+                header = ""
+                if report.draft_name.startswith("UNMATCHED-"):
+                    header = f"UNMATCHED: no planner number matches the title {report.title!r}; name this file by hand."
+                (out / f"{report.draft_name}.yaml").write_text(render_yaml(report.flow, header))
+        except Exception as exc:  # one bad score must not stop the run
+            failed += 1
+            msg = " ".join(f"{type(exc).__name__}: {exc}".split())
+            rows.append((pdf.name, "FAILED", "-", "-"))
+            print(f"{pdf.name}: FAILED {msg}", file=sys.stderr)
+            continue
+        rows.append((pdf.name, str(len(report.instrumentation)), str(len(report.features)), str(len(report.warnings))))
         for w in report.warnings:
-            print(f"  warning: {w}")
+            print(f"  warning ({pdf.name}): {w}", file=sys.stderr)
+    _print_summary(rows)
+    if failed:
+        print(f"{failed} of {len(pdfs)} scores failed", file=sys.stderr)
+        return 1
     return 0
 
 
