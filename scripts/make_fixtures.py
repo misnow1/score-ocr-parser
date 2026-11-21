@@ -138,7 +138,7 @@ SIBELIUS_INSTRUCTIONS = {
 }
 NONSTANDARD = ["Violin", "Viola", "Cello", "Organ", "Lead Vocal", "Flugelhorn"]
 NONSTANDARD_ABBREVIATED = ["Vln.", "Vla.", "Vc.", "Org.", "L. Voc.", "Flgh."]
-MISMATCH_FIRST = ["Alto Saxophone 1", "Trumpet in Bb 1-4", "Trombone 1-4"]
+MISMATCH_FIRST = ["Alto Saxophone 1", "Trumpet in Bb 1-4", "Trombone 1-4", "Guitar", "Drums"]
 MISMATCH_LATER = ["A. Sx. 1", "Tpt. 1-4", "Tbn. 1-5", "Vln.", "Zork."]
 
 
@@ -190,6 +190,63 @@ def finale_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+
+RA_CUE = ["Piano", "Bass", "Drum Set"]
+RA_FULL = [
+    "Piccolo",
+    "Alto Saxophone 1",
+    "Baritone Saxophone",
+    "Trumpet in Bb 1",
+    "Trumpet in Bb 2",
+    "Trombone 1",
+    "Violins",
+    "Piano",
+    "Bass",
+    "Drum Set",
+]
+RA_ABBR = ["Picc.", "A. Sx. 1", "Bari. Sax.", "B Tpt. 1", "B Tpt. 2", "Tbn. 1", "Vlns.", "Pno.", "Bass", "D. S."]
+
+
+def _right_label(page, right: float, y: float, text: str, size: float = 9) -> float:
+    """Draw `text` so that it ends at x=`right`; returns its left edge."""
+    x = right - pymupdf.get_text_length(text, fontname="helv", fontsize=size)
+    page.insert_text((x, y), text, fontname="helv", fontsize=size)
+    return x
+
+
+def right_aligned(music_font: Path, out: Path) -> None:
+    """Right-aligned staff labels, as a notation program exports them. Page 1: a
+    short two-staff cue system above the full system, a bare "Score" tag, a
+    group label ("Trumpets") and a time signature after each label (glued to the
+    baritone's). Page 2: a running title, "Score 2", abbreviations that include
+    "Vlns." and "B Tpt.", and chord symbols on the piano's line."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Right Aligned Tune", fontname="helv", fontsize=24)
+    for i, text in enumerate(RA_CUE):
+        y = 120 + i * 30
+        _right_label(p1, 90, y, text)
+        p1.draw_line((100, y), (580, y))
+    _right_label(p1, 110, 215, "Score")
+    for i, text in enumerate(RA_FULL):
+        y = 260 + i * 30
+        _right_label(p1, 110, y, text)
+        p1.draw_line((120, y), (580, y))
+        p1.insert_text((126, y), MUSIC_GLYPHS, fontfile=str(music_font), fontname="SynMusic", fontsize=14)
+        gap = 3 if text.startswith("Baritone") else 30
+        p1.insert_text((110 + gap, y), "44", fontname="helv", fontsize=9 if gap == 3 else 14)
+        if text.startswith("Trumpet in Bb 1"):
+            _right_label(p1, 110, y - 15, "Trumpets")
+    p2 = doc.new_page(width=612, height=792)
+    p2.insert_text((20, 30), "2 Synthetic Right Aligned Tune", fontname="helv", fontsize=9)
+    _right_label(p2, 70, 75, "Score 2")
+    for i, text in enumerate(RA_ABBR):
+        y = 120 + i * 30
+        x = _right_label(p2, 70, y, text)
+        p2.draw_line((80, y), (580, y))
+        if text == "Pno.":
+            p2.insert_text((74, y), "D D A7", fontname="helv", fontsize=9)
+    doc.save(out)
 
 
 def scanned(src: Path, out: Path, dpi: int) -> None:
@@ -260,6 +317,7 @@ def main() -> None:
             OUT / "sibelius_mismatch.pdf",
         )
         finale_solos(font, OUT / "finale_solos.pdf")
+        right_aligned(font, OUT / "finale_right_aligned.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")

@@ -70,13 +70,15 @@ def _phrases(row: list[Token]) -> list[list[Token]]:
     return groups
 
 
-def find_systems(page: Page) -> list[System]:
-    stacks = label_stacks(page)
+def find_systems(page: Page, headers: frozenset[str] = frozenset()) -> list[System]:
+    stacks = label_stacks(page, headers)
     if not stacks:
         return []
     label_tokens = {id(t) for stack in stacks for ln in stack for t in ln.tokens}
     other_rows = [
-        ln for ln in lines(page.tokens) if not any(id(t) in label_tokens for t in ln)
+        rest
+        for ln in lines(page.tokens)
+        if (rest := [t for t in ln if id(t) not in label_tokens])
     ]
     systems = [
         System(page.number, i, [Staff(ln.text, ln.yc) for ln in stack])

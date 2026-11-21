@@ -1,0 +1,30 @@
+# Text that sits in the staff-label column but is not a staff label. Matched
+# case-insensitively against a line's words with digits and punctuation removed.
+#
+# `group_words`: a line made only of these words is a section or score tag
+# ("Score 5", "Trumpets"), not a staff.
+# `header_words`: a line that starts with one of these is a credit or footer line.
+# `markings`: a lone dynamic or instruction word.
+group_words:
+  - score
+  - full score
+  - conductor
+  - saxes
+  - saxophones
+  - reeds
+  - woodwinds
+  - trumpets
+  - trombones
+  - brass
+  - rhythm
+  - rhythm section
+header_words:
+  - page
+  - copyright
+  - arr
+  - arranged
+  - music
+  - words
+  - composed
+  - www
+markings: [pp, p, mp, mf, f, ff, fff, sfz, fp, cresc, dim, rit, solo, vamp]

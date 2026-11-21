@@ -208,3 +208,36 @@ def test_empty_page_and_empty_instrumentation_warn(tmp_path, monkeypatch):
     assert report.pages[0].reason == "empty"
     assert any("page 1" in w and "no text" in w for w in report.warnings)
     assert any("instrumentation" in w for w in report.warnings)
+
+
+def test_right_aligned_labels_report_the_full_first_system():
+    report = parse_score(FIXTURES / "finale_right_aligned.pdf")
+
+    found = by_name(report)
+    assert set(found) == {
+        "Piccolo", "Alto Sax", "Baritone Sax", "Trumpet", "Trombone",
+        "Violin", "Piano", "Bass", "Drums",
+    }
+    assert found["Trumpet"].chairs == [1, 2]
+
+
+def test_trailing_time_signature_and_chords_are_not_part_of_a_label():
+    found = by_name(parse_score(FIXTURES / "finale_right_aligned.pdf"))
+
+    assert found["Baritone Sax"].chairs == [1]
+    assert found["Baritone Sax"].labels == ["Baritone Saxophone", "Bari. Sax."]
+    assert found["Piano"].labels == ["Piano", "Pno."]
+
+
+def test_headers_and_group_labels_are_not_labels():
+    report = parse_score(FIXTURES / "finale_right_aligned.pdf")
+
+    assert report.unknown_labels == []
+    assert report.warnings == []
+
+
+def test_abbreviations_with_dropped_flat_and_plural_resolve():
+    found = by_name(parse_score(FIXTURES / "finale_right_aligned.pdf"))
+
+    assert "Vlns." in found["Violin"].labels
+    assert "B Tpt. 1" in found["Trumpet"].labels

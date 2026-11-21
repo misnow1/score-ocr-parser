@@ -1,12 +1,34 @@
-"""Layout stage: group tokens into lines, find label stacks and instruction text."""
+"""Layout stage: group tokens into lines, find label stacks and instruction text.
 
+Staff labels sit in a column left of the staves. Notation programs either
+left-align or right-align them, so the column is found from a shared left edge
+or a shared right edge, whichever lines up more labels. Each line is cut to its
+label at the first big gap, glyph residue, chord symbol or time signature.
+"""
+
+import re
 from dataclasses import dataclass, field
+from functools import cache
 
+from .data import load
 from .models import Page, Token
 
 LINE_TOLERANCE = 3.0
-MARGIN_SLACK = 20.0
+EDGE_TOLERANCE = 3.0  # labels in one column share an edge to within this
+COLUMN_SLACK = 40.0  # later labels may start this far right of the column found first
+LABEL_GAP = 8.0  # a horizontal gap this wide ends the label
 STACK_GAP_FACTOR = 2.5
+MAX_LABEL_WORDS = 6
+MIN_HEADER_WORDS = 3  # a repeated line this long is a running title, not a label
+MIN_HEADER_PAGES = 2
+MIN_EXTRA_COLUMN = 3  # labels needed to accept a second column on a page
+
+_TIME_SIGNATURE = re.compile(r"^(?:\d{1,2}/\d{1,2}|(?:[2-9]|1[0-2])[248])$")
+_CHORD = re.compile(
+    r"^[A-G][#b♭♯]?(?:maj|min|dim|aug|sus|add|m|M|\+|°|ø)?\d*(?:[#b♭♯(]\d+\)?)*(?:/[A-G][#b♭♯]?)?$"
+)
+_CONNECTORS = frozenset({"&", "-", "–", ",", "+"})  # between chairs: "1 & 2"
+_CHAIR_LETTERS = frozenset("iIvVxX")  # roman numeral chairs
 
 
 @dataclass
@@ -14,6 +36,14 @@ class TextLine:
     text: str
     yc: float
     tokens: list[Token] = field(default_factory=list)
+
+    @property
+    def x0(self) -> float:
+        return self.tokens[0].x0
+
+    @property
+    def x1(self) -> float:
+        return self.tokens[-1].x1
 
 
 def lines(tokens: list[Token]) -> list[list[Token]]:
@@ -38,20 +68,140 @@ def _as_line(ln: list[Token]) -> TextLine:
     return TextLine(" ".join(t.text for t in ln), ln[0].yc, ln)
 
 
-def _split(page: Page) -> tuple[list[list[Token]], list[list[Token]]]:
-    """(left-margin lines, all other lines)."""
-    rows = _text_lines(page)
-    if not rows:
-        return [], []
-    left = min(ln[0].x0 for ln in rows)
-    margin = [ln for ln in rows if ln[0].x0 <= left + MARGIN_SLACK]
-    rest = [ln for ln in rows if ln[0].x0 > left + MARGIN_SLACK]
-    return margin, rest
+# --- cutting a line down to its label ---------------------------------------
 
 
-def label_stacks(page: Page) -> list[list[TextLine]]:
-    """Staff labels from the left-margin column, one stack per system, top to bottom."""
-    column, _ = _split(page)
+def _ends_label(tok: Token, previous: Token, following: Token | None) -> bool:
+    """Whether `tok` (not the first of its line) starts what follows a label:
+    a time signature, a chord symbol or glyph residue."""
+    text = tok.text
+    if _TIME_SIGNATURE.match(text):
+        return True
+    if not any(c.isalnum() for c in text) and text not in _CONNECTORS:
+        return True
+    if previous.text.lower() == "in":  # "Trumpet in Bb": a transposition, not a chord
+        return False
+    if _CHORD.match(text):
+        return True
+    if len(text) == 1 and text.isalpha() and text not in _CHAIR_LETTERS:
+        return True  # a notation glyph that came through as a letter
+    return len(text) == 1 and text.isalpha() and following is not None and following.text == text
+
+
+def _cut(row: list[Token]) -> list[Token]:
+    """The leading tokens of a line that form a staff label."""
+    label = [row[0]]
+    for i in range(1, len(row)):
+        tok = row[i]
+        if tok.x0 - label[-1].x1 > LABEL_GAP:
+            break
+        following = row[i + 1] if i + 1 < len(row) else None
+        if _ends_label(tok, label[-1], following):
+            break
+        label.append(tok)
+    return label
+
+
+# --- headers, footers and group labels --------------------------------------
+
+
+@cache
+def _filters() -> dict[str, frozenset[str]]:
+    data = load("label_filters.yaml")
+    return {k: frozenset(w.lower() for w in v) for k, v in data.items()}
+
+
+def _words(text: str) -> list[str]:
+    """Lower-case words with digits and punctuation removed."""
+    return re.sub(r"[^a-z\s]", " ", text.lower()).split()
+
+
+def _header_key(text: str) -> str:
+    return " ".join(_words(text))
+
+
+def _is_glyph_residue(text: str) -> bool:
+    """A lone word of one or two letters, or one letter repeated: a notation
+    glyph that came through as text ("YU", "oooo"), not an instrument."""
+    word = text.strip()
+    return word.isalpha() and (len(word) <= 2 or len(set(word.lower())) == 1)
+
+
+def _is_not_a_label(text: str) -> bool:
+    words = _words(text)
+    if not words:
+        return True  # nothing but numbers and punctuation
+    filters = _filters()
+    return (
+        _CHORD.match(text) is not None  # a lone chord symbol or letter
+        or _is_glyph_residue(text)
+        or text.lower().strip(".") in filters["markings"]
+        or " ".join(words) in filters["group_words"]
+        or words[0] in ("score", "conductor")
+        or words[0] in filters["header_words"]
+        or len(text.split()) > MAX_LABEL_WORDS
+    )
+
+
+def running_headers(pages: list[Page]) -> frozenset[str]:
+    """Keys of long lines that repeat on several pages: running titles."""
+    seen: dict[str, set[int]] = {}
+    for page in pages:
+        for ln in _text_lines(page):
+            key = _header_key(" ".join(t.text for t in _cut(ln)))
+            if len(key.split()) >= MIN_HEADER_WORDS:
+                seen.setdefault(key, set()).add(page.number)
+    return frozenset(k for k, nums in seen.items() if len(nums) >= MIN_HEADER_PAGES)
+
+
+# --- the label column -------------------------------------------------------
+
+
+def _edge_cluster(labels: list[list[Token]], edge) -> list[list[Token]]:
+    """The largest set of labels whose `edge` agrees to within the tolerance."""
+    best: list[list[Token]] = []
+    for anchor in labels:
+        group = [lb for lb in labels if abs(edge(lb) - edge(anchor)) <= EDGE_TOLERANCE]
+        if len(group) > len(best):
+            best = group
+    return best
+
+
+def _column(labels: list[list[Token]]) -> list[list[Token]]:
+    """Labels that line up on a shared left or right edge, taking the best
+    alignment first and repeating for labels left over that start inside the
+    column (the first system often has a different edge from later ones)."""
+    column: list[list[Token]] = []
+    rest = labels
+    while rest:
+        left = _edge_cluster(rest, lambda lb: lb[0].x0)
+        right = _edge_cluster(rest, lambda lb: lb[-1].x1)
+        best = left if len(left) > len(right) else right
+        if len(best) < 2 and (column or len(labels) > 1):
+            break
+        if column and len(best) < MIN_EXTRA_COLUMN:
+            break
+        column += best
+        reach = max(lb[-1].x1 for lb in column) + COLUMN_SLACK
+        rest = [lb for lb in rest if lb not in best and lb[0].x0 < reach]
+    return sorted(column, key=lambda lb: lb[0].yc)
+
+
+def _stack_labels(page: Page, headers: frozenset[str]) -> list[list[Token]]:
+    labels = []
+    for row in _text_lines(page):
+        label = _cut(row)
+        text = " ".join(t.text for t in label)
+        if _is_not_a_label(text) or _header_key(text) in headers:
+            continue
+        labels.append(label)
+    return _column(labels)
+
+
+def label_stacks(page: Page, headers: frozenset[str] = frozenset()) -> list[list[TextLine]]:
+    """Staff labels from the label column, one stack per system, top to bottom.
+    `headers` are the document's running titles (see `running_headers`)."""
+    column = _stack_labels(page, headers)
     if not column:
         return []
     gaps = [b[0].yc - a[0].yc for a, b in zip(column, column[1:])]
@@ -66,13 +216,18 @@ def label_stacks(page: Page) -> list[list[TextLine]]:
     return stacks
 
 
-def instruction_lines(page: Page) -> list[TextLine]:
-    """Text lines outside the label column (instructions, markings)."""
-    _, rest = _split(page)
-    return [_as_line(ln) for ln in rest]
+def instruction_lines(page: Page, headers: frozenset[str] = frozenset()) -> list[TextLine]:
+    """Text lines with the staff labels taken out (instructions, markings)."""
+    label_ids = {id(t) for stack in label_stacks(page, headers) for ln in stack for t in ln.tokens}
+    rows = []
+    for row in _text_lines(page):
+        rest = [t for t in row if id(t) not in label_ids]
+        if rest:
+            rows.append(_as_line(rest))
+    return rows
 
 
 def first_system_labels(page: Page) -> list[str]:
-    """Label strings from the first system on a page."""
+    """Label strings from the first stack on a page."""
     stacks = label_stacks(page)
     return [ln.text for ln in stacks[0]] if stacks else []

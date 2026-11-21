@@ -35,7 +35,7 @@ instruments:
     aliases: [baritone saxophone, baritone sax, bari sax, bari sx, bar sx, bar sax, b sx, bari]
   - name: Trumpet
     family: Trumpet
-    aliases: [trumpet, trumpets, trpt, tpt, tpts, trp]
+    aliases: [trumpet, trumpets, trpt, tpt, tpts, trp, b tpt, bb tpt, b trpt, bb trpt, b trumpet, bb trumpet]
   - name: Piccolo Trumpet
     family: Trumpet
     bare_doubling: true
@@ -69,7 +69,7 @@ instruments:
     aliases: [drums, drum set, drumset, drum kit, d s, dr, dm]
   - name: Violin
     family: Strings
-    aliases: [violin, violins, vln, vl]
+    aliases: [violin, violins, vln, vlns, vl]
   - name: Viola
     family: Strings
     aliases: [viola, violas, vla]

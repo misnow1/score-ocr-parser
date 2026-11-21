@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import cache
 
 from .data import load
-from .layout import TextLine, instruction_lines, label_stacks
+from .layout import TextLine, instruction_lines, label_stacks, running_headers
 from .models import InstrumentEntry, Page
 
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
@@ -141,6 +141,20 @@ class Instrumentation:
         return {e.instrument: set(e.chairs) for e in self.entries}
 
 
+def _first_system(stacks: list[tuple[int, list[TextLine]]]) -> int:
+    """Index of the first system: on the first page with any resolving label
+    (else the first page), the stack with the most labels that resolve; the
+    earliest stack wins a tie."""
+
+    def score(i: int) -> int:
+        return sum(resolve(ln.text) is not None for ln in stacks[i][1])
+
+    pages = list(dict.fromkeys(number for number, _ in stacks))
+    page = next((n for n in pages if any(score(i) for i, (m, _) in enumerate(stacks) if m == n)), pages[0])
+    candidates = [i for i, (number, _) in enumerate(stacks) if number == page]
+    return max(candidates, key=lambda i: (score(i), -i))
+
+
 def build_instrumentation(pages: list[Page]) -> Instrumentation:
     """First system's full names, cross-checked against abbreviated labels on
     later systems."""
@@ -148,9 +162,11 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
     unknown: list[str] = []
     warnings: dict[str, None] = {}
 
-    stacks = [(p.number, st) for p in pages for st in label_stacks(p)]
+    headers = running_headers(pages)
+    stacks = [(p.number, st) for p in pages for st in label_stacks(p, headers)]
     if not stacks:
         return Instrumentation([], [], [])
+    first = _first_system(stacks)
 
     def add(label: str, hit: Resolved) -> InstrumentEntry:
         entry = entries.setdefault(hit.name, InstrumentEntry(hit.name, hit.family, [], [], []))
@@ -160,7 +176,7 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
         entry.doublings += [d for d in hit.doublings if d not in entry.doublings]
         return entry
 
-    for line in stacks[0][1]:
+    for line in stacks[first][1]:
         hit = resolve(line.text)
         if hit is None:
             unknown.append(line.text)
@@ -168,7 +184,7 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
             add(line.text, hit)
 
     first_chairs = {name: set(e.chairs) for name, e in entries.items()}
-    for number, stack in stacks[1:]:
+    for number, stack in (st for i, st in enumerate(stacks) if i != first):
         for line in stack:
             check = resolve_against_first_system(line.text, first_chairs)
             if check.hit is None and line.text not in unknown:
@@ -182,7 +198,7 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
         page_labels = [ln for n, st in stacks if n == page.number for ln in st]
         if not page_labels:
             continue
-        for ins in instruction_lines(page):
+        for ins in instruction_lines(page, headers):
             doubled = instruction_doublings(ins.text)
             owner = resolve(_nearest(page_labels, ins.yc).text) if doubled else None
             entry = entries.get(owner.name) if owner else None

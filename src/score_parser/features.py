@@ -2,6 +2,7 @@
 
 import re
 
+from .layout import running_headers
 from .instruments import resolve_against_first_system
 from .models import Feature, FeatureKind, Page
 from .systems import X_SLACK, Phrase, System, find_systems
@@ -69,7 +70,8 @@ def find_features(
 ) -> tuple[list[Feature], list[str]]:
     """(features, warnings). Instruments come only from the first system's
     instrumentation (`first_chairs`); anything else is dropped with a warning."""
-    systems = [s for page in pages for s in find_systems(page)]
+    headers = running_headers(pages)
+    systems = [s for page in pages for s in find_systems(page, headers)]
     features: list[Feature] = []
     warnings: dict[str, None] = {}
     for system in systems:
