@@ -126,3 +126,21 @@ def test_parse_run_leaves_git_status_free_of_pdfs_and_images(tmp_path):
         cwd=work, capture_output=True, text=True, check=True,
     ).stdout
     assert ".pdf" not in status and ".png" not in status and "out/" not in status
+
+
+def test_later_system_abbreviations_resolve_to_first_system_instruments(tmp_path):
+    first = ["Tenor Saxophone 1", "Guitar", "French Horn 1", "Percussion", "Tuba"]
+    later = ["Ten. Sax. 1", "E. Gtr.", "Hn. 1", "Perc.", "Tuba"]
+    pdf = make_score(tmp_path / "abbr.pdf", [(150, first), (400, later)])
+
+    report = parse_score(pdf)
+
+    assert report.warnings == []
+    assert report.unknown_labels == []
+    assert {e.instrument for e in report.instrumentation} == {
+        "Tenor Sax",
+        "Guitar",
+        "French Horn",
+        "Percussion",
+        "Tuba",
+    }

@@ -31,13 +31,22 @@ report = parse_score("SCORE.pdf")
 report.instrumentation, report.unknown_labels
 ```
 
+The JSON report (`report.to_dict()`) has these fields:
+
+- `title`, `title_source`, `matched_slug`, `draft_name`, `unmatched`;
+- `instrumentation[]`: `instrument`, `family`, `chairs`, `labels`, `doublings`;
+- `features[]`: `kind` (`solo` or `feature`), `instrument`, `page`, `bar`, `rehearsal_mark`, `raw_text`, `confidence`, `reasons`, and `locations[]` (each `{page, bar}`: the first appearance of a merged feature, then its reminders);
+- `flow[]`: the draft steps (`section`, `instrument`, `note`, `todo`);
+- `unknown_labels`, `warnings`;
+- `pages[]`: `page`, `source` (`text` or `ocr`), `ocr_confidence`, `dpi`, `reason` (`text`, `image`, `pattern` or `empty`: why the page was read that way) and `rotation` (degrees clockwise the scan is printed rotated: 0, 90 or 270; 0 for text pages).
+
 Each page is classified with a reason, recorded as `report.pages[].reason`: `text` (has a text layer), `image` (almost no text words plus a page-sized image), `pattern` (almost no text words and the page draws its content as a tiling-pattern fill, which hides the image from image detection) or `empty` (almost no text words and nothing else). Every page but `text` is sent to OCR automatically; `pattern` and `empty` pages are rendered whole at 300 dpi first. A page that yields no tokens, and a score whose instrumentation comes back empty, add entries to `report.warnings`, so zero results are never silent. Scans are read with Apple Vision OCR (macOS only, via pyobjc; installed on macOS only). OCR yields the same positioned words as a text layer. The embedded image is read at native resolution; pages under about 300 dpi are upscaled to 300 dpi. Recognition is accurate-level with language correction off and the alias table as custom vocabulary. `--force-ocr` (CLI) or `ParseOptions(force_ocr=True)` OCRs every page regardless of text layer. `report.pages` records each page's `source` (`text` or `ocr`), `ocr_confidence` and `dpi`; pages under 150 dpi or below 0.5 mean OCR confidence add entries to `report.warnings` (the CLI prints them). Scans printed sideways are handled by trying three orientations per page (content rotated 0, 90 or 270 degrees clockwise): the image is turned upright for each, OCR runs, and the best wins by instrument-word hits in the left half of the upright page (staff labels sit left of the staves, and Vision also reads upside-down text, so it can't pick by confidence alone), then total hits, then mean confidence. Tokens come back in the upright frame and `Page` width and height are swapped for a turned scan, so layout sees an upright page. The chosen rotation is recorded as `report.pages[].rotation` (0 for text pages). The text-layer path imports nothing macOS-specific, so it stays cross-platform.
 
 Current scope: text-layer PDFs and scans. The report lists the instruments on the first system (full names), with:
 
 - chairs, expanded from ranges ("1-4", "1–4", "Tbn.1-4", "i & II");
 - doublings, from labels ("Flute (Oboe) 1-3") and from instruction text ("to Flute", "piccolo trpt"; a "Mute" marking is ignored). An instruction is attached to the staff label nearest to it vertically;
-- non-standard instruments (violin, viola, cello, organ, guitars, lead vocal, flugelhorn, piccolo trumpet, and others in the alias table).
+- non-standard instruments (violin, viola, cello, organ, guitars, french horn, tuba, percussion, lead vocal, flugelhorn, piccolo trumpet, and others in the alias table).
 
 Staff labels are found as a column at the left of the staves. Notation programs right-align them (short names such as "Piano" or "Picc." start further right), so the column is found from labels sharing a right edge, or a left edge for left-aligned scores, whichever lines up more labels. Each line is cut to its label at the first gap of 8 pt or more, glyph residue, chord symbol ("Pno. D D A7") or time signature ("Baritone Saxophone 44": the 44 is never read as a chair). Running titles (a long line repeating on several pages), score and group tags ("Score 5", "Trumpets"), credit and footer lines, lone chords and dynamics, and one- or two-letter glyph residue are not labels (`data/label_filters.yaml`). The first system is the stack with the most resolving labels on the first page that has any, not simply the topmost stack.
 
