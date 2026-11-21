@@ -1,0 +1,9 @@
+# Case-insensitive substrings of font names whose glyphs are music symbols,
+# not text. Tokens set in these fonts are dropped before layout.
+music_fonts:
+  - opus
+  - maestro
+  - petrucci
+  - bravura
+  - emmentaler
+  - syntheticmusic

@@ -1,0 +1,14 @@
+# Licensing guard: never commit scores, renders or output.
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+out/
+.venv/
+__pycache__/
+*.egg-info/
+# Committed synthetic fixtures only
+!tests/fixtures/synthetic/
+!tests/fixtures/synthetic/**
