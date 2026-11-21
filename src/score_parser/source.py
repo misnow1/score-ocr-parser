@@ -38,18 +38,25 @@ def scan_warnings(page: Page) -> list[str]:
 
 
 def _text_page(pg: pymupdf.Page, number: int) -> Page:
-    spans = [
-        (pymupdf.Rect(s["bbox"]), s["font"])
-        for b in pg.get_text("dict")["blocks"]
+    chars = [
+        (pymupdf.Point((c["bbox"][0] + c["bbox"][2]) / 2, (c["bbox"][1] + c["bbox"][3]) / 2), s["font"])
+        for b in pg.get_text("rawdict")["blocks"]
         for ln in b.get("lines", [])
         for s in ln["spans"]
+        for c in s["chars"]
+        if c["c"].strip()
     ]
     tokens = []
     for x0, y0, x1, y1, text, *_ in pg.get_text("words"):
-        centre = pymupdf.Point((x0 + x1) / 2, (y0 + y1) / 2)
-        font = next((f for r, f in spans if centre in r), "")
-        tokens.append(Token(text, x0, y0, x1, y1, number, font))
+        box = pymupdf.Rect(x0, y0, x1, y1)
+        tokens.append(Token(text, x0, y0, x1, y1, number, _word_font(box, chars)))
     return Page(number, pg.rect.width, pg.rect.height, tokens)
+
+
+def _word_font(box: pymupdf.Rect, chars: list[tuple[pymupdf.Point, str]]) -> str:
+    """The font of a word's own characters; "" when they are not all in one font."""
+    fonts = {f for centre, f in chars if centre in box}
+    return fonts.pop() if len(fonts) == 1 else ""
 
 
 def _page_image(doc: pymupdf.Document, pg: pymupdf.Page) -> tuple[int, pymupdf.Rect] | None:

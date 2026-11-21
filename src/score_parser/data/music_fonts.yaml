@@ -1,5 +1,6 @@
 # Case-insensitive substrings of font names whose glyphs are music symbols,
-# not text. Tokens set in these fonts are dropped before layout.
+# not text. Tokens set in these fonts are dropped before layout. Finale fonts
+# draw glyphs as ordinary characters, so they are listed too.
 music_fonts:
   - opus
   - maestro
@@ -7,3 +8,16 @@ music_fonts:
   - bravura
   - emmentaler
   - syntheticmusic
+  - jazz
+  - finalejazz
+  - broadwaycopyist
+
+# A font name containing one of these is a text font, never music, even when it
+# also contains a music-font substring (JazzText, BroadwayCopyistText, OpusText).
+text_fonts:
+  - text
+
+# Characters used as music glyphs when a word's font is unknown (empty).
+# Such a word is dropped when it is made only of these characters, or when it
+# holds any non-ASCII one (real labels never do). Private-use characters always count.
+music_glyphs: "&?>|+.-\u0153\u0152\u2019\u2018\u00e3\u00d3\u00d4\u00db\u00bf\u02d9\u2122\u2030\u2022\u00b0\u2211\u0192\u201a\u201e"

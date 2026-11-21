@@ -157,3 +157,17 @@ def test_text_layer_path_does_not_import_macos_modules():
         "sys.exit(any(m in sys.modules for m in ('Vision', 'Quartz', 'objc')))"
     )
     assert subprocess.run([sys.executable, "-c", code]).returncode == 0
+
+
+def test_finale_glyphs_in_a_jazz_font_do_not_become_labels():
+    report = parse_score(FIXTURES / "finale_jazz_glyphs.pdf")
+
+    assert report.unknown_labels == ["Zorblax Section"]
+    assert "Piano" in by_name(report)
+
+
+def test_glyph_words_spanning_several_fonts_do_not_become_labels():
+    report = parse_score(FIXTURES / "sibelius_multispan_glyphs.pdf")
+
+    assert report.unknown_labels == ["Zorblax Section"]
+    assert "Piano" in by_name(report)

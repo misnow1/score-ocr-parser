@@ -3,7 +3,7 @@
 - **Score**: a conductor score PDF (text-layer export or image-only scan). Scores are unlicensed copies and are never copied or committed.
 - **Token**: a positioned word with text, bounding box, page, font name, source and OCR confidence.
 - **Text layer**: words embedded in a PDF. **OCR** produces the same tokens from page images.
-- **Music-font glyph**: a clef, note, rest or accidental drawn from a notation font (private-use characters, or Opus-style fonts). Removed in the clean stage.
+- **Music-font glyph**: a clef, note, rest or accidental drawn from a notation font (private-use characters, or ordinary characters set in a notation font such as Opus, Maestro or Finale Jazz; a word with an empty font name made only of glyph characters counts too). Tested in one place, `is_music`, and removed in the clean stage.
 - **Staff label**: the instrument name at the left of a staff. Full names appear on the first system, abbreviations on later ones.
 - **Label stack**: the staff labels in the left-margin column for one system, top to bottom. A large vertical gap starts a new stack.
 - **System**: one row of staves across the page.

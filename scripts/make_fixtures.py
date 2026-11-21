@@ -50,7 +50,7 @@ def build_music_font(path: Path, family: str = "SyntheticMusic", chars: str = MU
     fb.save(str(path))
 
 
-def finale_style(music_font: Path, out: Path) -> None:
+def finale_style(music_font: Path, out: Path, glyphs: str = MUSIC_GLYPHS, glyph_x: float = 150) -> None:
     """One system: full instrument labels, music glyphs, a bar number."""
     doc = pymupdf.open()
     page = doc.new_page(width=612, height=792)
@@ -60,7 +60,7 @@ def finale_style(music_font: Path, out: Path) -> None:
         page.insert_text((30, y), text, fontname="helv", fontsize=9)
         page.draw_line((140, y), (580, y))
         page.insert_text(
-            (150, y - 5), MUSIC_GLYPHS, fontfile=str(music_font), fontname="SynMusic", fontsize=14
+            (glyph_x, y - (5 if glyph_x >= 150 else 0)), glyphs, fontfile=str(music_font), fontname="SynMusic", fontsize=14
         )
     page.insert_text((140, 135), "1", fontname="helv", fontsize=7)
     doc.save(out)
@@ -92,6 +92,22 @@ def sibelius_style(
             page.draw_line((140, y), (580, y))
             if top == tops[0] and text in instructions:
                 page.insert_text((200, y - 12), instructions[text], fontname="helv", fontsize=8)
+    doc.save(out)
+
+
+def multispan_style(one: Path, two: Path, out: Path) -> None:
+    """Sibelius/PrimoPDF-style: each glyph word is two glyphs in two unlisted
+    fonts, adjacent so they form one word spanning two spans."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Tune", fontname="helv", fontsize=24)
+    page.insert_text((140, 136), "1", fontname="helv", fontsize=7)
+    for i, text in enumerate(LABELS):
+        y = 150 + i * 60
+        page.insert_text((30, y), text, fontname="helv", fontsize=9)
+        page.draw_line((140, y), (580, y))
+        page.insert_text((118, y), "&", fontfile=str(one), fontname="GlyphOne", fontsize=14)
+        page.insert_text((118 + 14 * 0.7, y), "?", fontfile=str(two), fontname="GlyphTwo", fontsize=14)
     doc.save(out)
 
 
@@ -193,6 +209,13 @@ def main() -> None:
         font = Path(tmp) / "SyntheticMusic.ttf"
         build_music_font(font)
         finale_style(font, OUT / "finale_full_labels.pdf")
+        jazz = Path(tmp) / "Jazz.ttf"
+        build_music_font(jazz, family="Jazz", chars="\u0153&\u2019\u00e3")
+        finale_style(jazz, OUT / "finale_jazz_glyphs.pdf", glyphs="\u0153&\u2019\u00e3", glyph_x=118)
+        one, two = Path(tmp) / "One.ttf", Path(tmp) / "Two.ttf"
+        build_music_font(one, family="Glyph One", chars="&")
+        build_music_font(two, family="Glyph Two", chars="?")
+        multispan_style(one, two, OUT / "sibelius_multispan_glyphs.pdf")
         opus = Path(tmp) / "Opus.ttf"
         build_music_font(opus, family="Opus Std", chars="&?")
         sibelius_style(
