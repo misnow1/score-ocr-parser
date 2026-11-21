@@ -4,9 +4,11 @@ import re
 from dataclasses import dataclass
 from functools import cache
 
+import pymupdf
+
 from .data import load
 from .layout import TextLine, instruction_lines, label_stacks, running_headers
-from .models import InstrumentEntry, Page
+from .models import InstrumentEntry, Page, Token
 
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
 _NUM = r"(?:\d+|i{1,3}|iv|v)"
@@ -212,3 +214,13 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
 def vocabulary() -> list[str]:
     """Every alias, as a custom vocabulary for OCR."""
     return sorted(_table())
+
+
+def vocabulary_hits(tokens: list[Token], frame: pymupdf.Rect) -> tuple[int, int]:
+    """(hits in the left half, all hits): upright instrument words in the alias
+    table. Vision reads sideways and upside-down text too, so only words set
+    horizontally count, and staff labels sit left of the staves, so an
+    upside-down page finds its labels on the right. Scores an OCR orientation."""
+    hits = [t for t in tokens if t.x1 - t.x0 > t.y1 - t.y0 and resolve(t.text)]
+    left = [t for t in hits if (t.x0 + t.x1) / 2 < frame.x0 + frame.width / 2]
+    return len(left), len(hits)

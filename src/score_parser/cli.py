@@ -9,6 +9,7 @@ from pathlib import Path
 from . import ParseOptions, parse_score
 from .clean import clean
 from .flow import render_yaml
+from .instruments import vocabulary_hits
 from .layout import first_system_labels, lines
 from .models import ScoreReport
 from .source import read_pages
@@ -109,7 +110,7 @@ def _parse(args: argparse.Namespace) -> int:
 
 def _inspect(args: argparse.Namespace) -> int:
     """Print only. Never writes files (scores are unlicensed)."""
-    pages = read_pages(Path(args.path), force_ocr=args.force_ocr)
+    pages = read_pages(Path(args.path), args.force_ocr, vocabulary_hits)
     if not 1 <= args.page <= len(pages):
         print(f"page {args.page} out of range (1-{len(pages)})", file=sys.stderr)
         return 1

@@ -5,7 +5,7 @@ from pathlib import Path
 from .clean import clean
 from .features import find_features
 from .flow import build_flow
-from .instruments import build_instrumentation
+from .instruments import build_instrumentation, vocabulary_hits
 from .matching import draft_name, match_slug
 from .models import PageInfo, ParseOptions, ScoreReport
 from .source import read_pages, scan_warnings
@@ -18,7 +18,7 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
     """Read one score PDF in place and return its report."""
     path = Path(path)
     options = options or ParseOptions()
-    pages = [clean(p) for p in read_pages(path, force_ocr=options.force_ocr)]
+    pages = [clean(p) for p in read_pages(path, options.force_ocr, vocabulary_hits)]
     instrumentation = build_instrumentation(pages)
     warnings = [w for p in pages for w in scan_warnings(p)] + instrumentation.warnings
     if not instrumentation.entries:
