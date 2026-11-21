@@ -1,6 +1,7 @@
 """Data model shared by the pipeline stages and the public report."""
 
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -78,6 +79,8 @@ class FlowStep:
 class ScoreReport:
     title: str
     title_source: str
+    matched_slug: str | None = None  # planner number slug, with numbers_dir
+    draft_name: str = ""  # file stem for the flow draft
     instrumentation: list[InstrumentEntry] = field(default_factory=list)
     features: list[Feature] = field(default_factory=list)
     flow: list[FlowStep] = field(default_factory=list)
@@ -94,3 +97,4 @@ class ParseOptions:
     """Options for parse_score."""
 
     force_ocr: bool = False
+    numbers_dir: Path | None = None  # planner numbers/ dir, read-only

@@ -1,6 +1,6 @@
 # score-ocr-parser
 
-Extract the instrumentation (and, in later tickets, solos and features) from big-band conductor score PDFs. Runs locally; the PDFs are read in place and never copied.
+Extract the instrumentation and solos and features, and draft a planner flow, from big-band conductor score PDFs. Runs locally; the PDFs are read in place and never copied.
 
 ## Setup
 
@@ -16,11 +16,11 @@ OCR tests are macOS-only and are skipped elsewhere; CI runs them on a macOS runn
 ## Usage
 
 ```
-uv run score-parser parse SCORE.pdf [FOLDER ...] --out out [--force-ocr]
+uv run score-parser parse SCORE.pdf [FOLDER ...] --out out [--format json|yaml|both] [--numbers-dir DIR] [--force-ocr]
 uv run score-parser inspect SCORE.pdf --page 1 [--tokens | --layout] [--force-ocr]
 ```
 
-- `parse` writes `<score>.json` per PDF into the output directory (default `out/`, git-ignored) and prints a one-line summary per score.
+- `parse` writes, per PDF, the JSON report `<score>.json` and/or the flow draft `<name>.yaml` into the output directory (default `out/`, git-ignored), chosen by `--format` (`json` default, `yaml`, or `both`), and prints a one-line summary per score.
 - `inspect` prints one page's cleaned tokens (default) or the label column and lines to stdout. It never writes files.
 
 Library use:
@@ -44,6 +44,12 @@ Abbreviated labels on later systems ("A. Sx. 1", "Tbn. 1-4", "E.B.", "D. S.") ar
 Music-font glyphs are removed before reading: private-use characters, and any token set in a font listed in `music_fonts.yaml` (Sibelius Opus glyphs look like plain ASCII, so only the font name identifies them). The alias table (`aliases.yaml`) and music-font list are editable data in `src/score_parser/data/`.
 
 Solo and feature detection: `report.features` lists every solo or feature marking ("ALTO SOLO", "1x - Solo", "Male vocal solo", "vamp for drum feature") with kind, instrument (from the text, else from the staff it sits on), page, nearest bar number, current rehearsal mark, raw text, confidence and reasons. Layout analysis finds systems (stacks of left-margin labels), staff bands, bar numbers and rehearsal marks (single capitals and section words listed in `data/rehearsal_words.yaml`), and splits glued tokens such as "29ALTO SOLO".
+
+Flow draft (`--format yaml`, or `report.flow`): a `flow:` block in the shape mic-assignment-planner uses in `numbers/*.yaml`. One step per feature, each with `section` ("Alto Sax solo (B)"), `instrument` (lower case) and a `note` giving page, bar, rehearsal mark and confidence. Steps below 0.8 confidence, or with no instrument, are followed by a `# TODO(score-parser)` comment giving the reasons. The draft never contains `kind` (vocal or instrumental) or `position` (DS1-DS5); those stay with the planner.
+
+Title: the filename with noise removed ("SCORE", dates, years, "AJC", "copy", "(1)" and similar); if nothing is left, the largest text on page 1. `report.title_source` says which (`filename` or `page 1`).
+
+`--numbers-dir DIR` (or `ParseOptions(numbers_dir=...)`) points at the planner's `numbers/` folder, which is only read. The title is fuzzy-matched (rapidfuzz) against the slugs, each file's `title:` and the known aliases in `data/title_aliases.yaml` (First Noel = First Nowell, Superstition = Super Christmas). A match names the draft `<slug>.yaml` (`report.matched_slug`). With no match the draft is named `UNMATCHED-<title-slug>.yaml` and starts with an `UNMATCHED` comment. Without `--numbers-dir` the draft is named for the title slug. `parse` refuses an output directory inside the numbers directory, so it never writes into the planner repo.
 
 ## Licensing
 

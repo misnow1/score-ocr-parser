@@ -14,16 +14,23 @@ from .source import read_pages
 
 def _parse(args: argparse.Namespace) -> int:
     out = Path(args.out)
+    numbers_dir = Path(args.numbers_dir) if args.numbers_dir else None
+    if numbers_dir and (out.resolve() == numbers_dir.resolve() or numbers_dir.resolve() in out.resolve().parents):
+        print("refusing to write into the planner numbers directory", file=sys.stderr)
+        return 2
     out.mkdir(parents=True, exist_ok=True)
     pdfs: list[Path] = []
     for p in map(Path, args.paths):
         pdfs.extend(sorted(p.glob("*.pdf")) if p.is_dir() else [p])
     for pdf in pdfs:
-        report = parse_score(pdf, ParseOptions(force_ocr=args.force_ocr))
+        report = parse_score(pdf, ParseOptions(force_ocr=args.force_ocr, numbers_dir=numbers_dir))
         if args.format in ("json", "both"):
             (out / f"{pdf.stem}.json").write_text(json.dumps(report.to_dict(), indent=2) + "\n")
         if args.format in ("yaml", "both"):
-            (out / f"{pdf.stem}.yaml").write_text(render_yaml(report.flow))
+            header = ""
+            if report.draft_name.startswith("UNMATCHED-"):
+                header = f"UNMATCHED: no planner number matches the title {report.title!r}; name this file by hand."
+            (out / f"{report.draft_name}.yaml").write_text(render_yaml(report.flow, header))
         print(
             f"{pdf.name}: {len(report.instrumentation)} instruments, "
             f"{len(report.features)} features, "
@@ -65,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         "--format", choices=["json", "yaml", "both"], default="json",
         help="json report, yaml flow draft, or both (default: json)",
     )
+    p.add_argument("--numbers-dir", help="planner numbers/ directory (read-only): match titles to slugs")
     p.add_argument("--force-ocr", action="store_true", help="OCR every page, ignoring any text layer")
     p.set_defaults(func=_parse)
 

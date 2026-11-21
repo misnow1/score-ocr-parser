@@ -6,6 +6,7 @@ from .clean import clean
 from .features import find_features
 from .flow import build_flow
 from .instruments import build_instrumentation
+from .matching import match_slug, slugify
 from .models import PageInfo, ParseOptions, ScoreReport
 from .source import read_pages, scan_warnings
 from .title import score_title
@@ -22,9 +23,18 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
     warnings = [w for p in pages for w in scan_warnings(p)] + label_warnings
     title, title_source = score_title(path, pages)
     features = find_features(pages)
+    slug = match_slug(title, Path(options.numbers_dir)) if options.numbers_dir else None
+    if slug:
+        draft_name = slug
+    elif options.numbers_dir:
+        draft_name = f"UNMATCHED-{slugify(title)}"
+    else:
+        draft_name = slugify(title)
     return ScoreReport(
         title=title,
         title_source=title_source,
+        matched_slug=slug,
+        draft_name=draft_name,
         instrumentation=instrumentation,
         features=features,
         flow=build_flow(features),
