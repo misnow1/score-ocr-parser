@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .clean import clean
 from .features import find_features
+from .flow import build_flow
 from .instruments import build_instrumentation
 from .models import PageInfo, ParseOptions, ScoreReport
 from .source import read_pages, scan_warnings
@@ -20,11 +21,13 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
     instrumentation, unknown, label_warnings = build_instrumentation(pages)
     warnings = [w for p in pages for w in scan_warnings(p)] + label_warnings
     title, title_source = score_title(path, pages)
+    features = find_features(pages)
     return ScoreReport(
         title=title,
         title_source=title_source,
         instrumentation=instrumentation,
-        features=find_features(pages),
+        features=features,
+        flow=build_flow(features),
         unknown_labels=unknown,
         pages=[PageInfo(p.number, p.source, p.ocr_confidence, p.dpi) for p in pages],
         warnings=warnings,

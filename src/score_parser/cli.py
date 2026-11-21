@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import ParseOptions, parse_score
 from .clean import clean
+from .flow import render_yaml
 from .layout import first_system_labels, lines
 from .source import read_pages
 
@@ -19,7 +20,10 @@ def _parse(args: argparse.Namespace) -> int:
         pdfs.extend(sorted(p.glob("*.pdf")) if p.is_dir() else [p])
     for pdf in pdfs:
         report = parse_score(pdf, ParseOptions(force_ocr=args.force_ocr))
-        (out / f"{pdf.stem}.json").write_text(json.dumps(report.to_dict(), indent=2) + "\n")
+        if args.format in ("json", "both"):
+            (out / f"{pdf.stem}.json").write_text(json.dumps(report.to_dict(), indent=2) + "\n")
+        if args.format in ("yaml", "both"):
+            (out / f"{pdf.stem}.yaml").write_text(render_yaml(report.flow))
         print(
             f"{pdf.name}: {len(report.instrumentation)} instruments, "
             f"{len(report.features)} features, "
@@ -57,6 +61,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("parse", help="parse score PDFs and write JSON reports")
     p.add_argument("paths", nargs="+", help="PDF files or folders of PDFs")
     p.add_argument("--out", default="out", help="output directory (default: out)")
+    p.add_argument(
+        "--format", choices=["json", "yaml", "both"], default="json",
+        help="json report, yaml flow draft, or both (default: json)",
+    )
     p.add_argument("--force-ocr", action="store_true", help="OCR every page, ignoring any text layer")
     p.set_defaults(func=_parse)
 

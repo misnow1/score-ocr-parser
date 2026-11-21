@@ -65,11 +65,22 @@ class Feature:
 
 
 @dataclass
+class FlowStep:
+    """One draft `flow:` step in the planner's shape (never kind or position)."""
+
+    section: str
+    instrument: str
+    note: str
+    todo: str | None = None  # set on low-confidence steps
+
+
+@dataclass
 class ScoreReport:
     title: str
     title_source: str
     instrumentation: list[InstrumentEntry] = field(default_factory=list)
     features: list[Feature] = field(default_factory=list)
+    flow: list[FlowStep] = field(default_factory=list)
     unknown_labels: list[str] = field(default_factory=list)
     pages: list[PageInfo] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
