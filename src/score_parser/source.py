@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pymupdf
 
-from .models import Page, Token
+from .models import Page, PageReason, Token
 
 # A page with at most this many words and a mostly-covering image is a scan.
 MAX_TEXT_WORDS = 5
@@ -20,16 +20,36 @@ def read_pages(path: Path, force_ocr: bool = False) -> list[Page]:
     pages = []
     with pymupdf.open(path) as doc:
         for i, pg in enumerate(doc, start=1):
-            image = _page_image(doc, pg)
-            if force_ocr or (_is_image_only(pg) and image):
-                pages.append(_ocr_page(doc, pg, i, image))
+            reason = classify_page(pg)
+            if force_ocr or reason != "text":
+                pages.append(_ocr_page(doc, pg, i, _page_image(doc, pg), reason))
             else:
                 pages.append(_text_page(pg, i))
     return pages
 
 
+def classify_page(pg: pymupdf.Page) -> PageReason:
+    """Why a page is read the way it is.
+
+    "text": it has a text layer. With almost no text words it is instead "image"
+    (a page-sized embedded image), "pattern" (a tiling-pattern fill, which image
+    detection cannot see) or "empty" (nothing readable). Anything but "text" is
+    rendered and sent to OCR.
+    """
+    if len(pg.get_text("words")) > MAX_TEXT_WORDS:
+        return "text"
+    image = _page_image(pg.parent, pg)
+    if image and image[1].get_area() / pg.rect.get_area() >= MIN_IMAGE_COVERAGE:
+        return "image"
+    if b"/Pattern" in pg.read_contents():
+        return "pattern"
+    return "empty"
+
+
 def scan_warnings(page: Page) -> list[str]:
     out = []
+    if not page.tokens:
+        out.append(f"page {page.number}: no text found ({page.reason}, read by {page.source})")
     if page.dpi is not None and page.dpi < MIN_USEFUL_DPI:
         out.append(f"page {page.number}: low resolution ({page.dpi:.0f} dpi), results unreliable")
     if page.ocr_confidence is not None and page.ocr_confidence < MIN_CONFIDENCE:
@@ -49,7 +69,7 @@ def _text_page(pg: pymupdf.Page, number: int) -> Page:
         centre = pymupdf.Point((x0 + x1) / 2, (y0 + y1) / 2)
         font = next((f for r, f in spans if centre in r), "")
         tokens.append(Token(text, x0, y0, x1, y1, number, font))
-    return Page(number, pg.rect.width, pg.rect.height, tokens)
+    return Page(number, pg.rect.width, pg.rect.height, tokens, reason="text")
 
 
 def _page_image(doc: pymupdf.Document, pg: pymupdf.Page) -> tuple[int, pymupdf.Rect] | None:
@@ -62,23 +82,16 @@ def _page_image(doc: pymupdf.Document, pg: pymupdf.Page) -> tuple[int, pymupdf.R
     return best
 
 
-def _is_image_only(pg: pymupdf.Page) -> bool:
-    image = _page_image(pg.parent, pg)
-    if image is None:
-        return False
-    covered = image[1].get_area() / pg.rect.get_area()
-    return covered >= MIN_IMAGE_COVERAGE and len(pg.get_text("words")) <= MAX_TEXT_WORDS
-
-
 def _ocr_page(
     doc: pymupdf.Document,
     pg: pymupdf.Page,
     number: int,
     image: tuple[int, pymupdf.Rect] | None,
+    reason: PageReason,
 ) -> Page:
     from .ocr import recognise  # macOS-only; imported lazily
 
-    if image is None:  # forced OCR on a page with no image: render it
+    if reason in ("pattern", "empty") or image is None:  # no usable image: render the page
         rect, dpi = pg.rect, float(TARGET_DPI)
         png = pg.get_pixmap(dpi=TARGET_DPI, alpha=False).tobytes("png")
     else:
@@ -95,5 +108,12 @@ def _ocr_page(
     confidences = [t.confidence for t in tokens if t.confidence is not None]
     mean = sum(confidences) / len(confidences) if confidences else 0.0
     return Page(
-        number, pg.rect.width, pg.rect.height, tokens, "ocr", ocr_confidence=mean, dpi=dpi
+        number,
+        pg.rect.width,
+        pg.rect.height,
+        tokens,
+        "ocr",
+        ocr_confidence=mean,
+        dpi=dpi,
+        reason=reason,
     )
