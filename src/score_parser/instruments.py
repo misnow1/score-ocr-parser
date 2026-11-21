@@ -3,10 +3,8 @@
 import re
 from dataclasses import dataclass
 from functools import cache
-from importlib.resources import files
 
-import yaml
-
+from .data import load
 from .layout import TextLine, instruction_lines, label_stacks
 from .models import InstrumentEntry, Page
 
@@ -28,9 +26,7 @@ class Resolved:
 
 @cache
 def _data() -> list[dict]:
-    return yaml.safe_load(files("score_parser.data").joinpath("aliases.yaml").read_text())[
-        "instruments"
-    ]
+    return load("aliases.yaml")["instruments"]
 
 
 @cache

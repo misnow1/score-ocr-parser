@@ -1,11 +1,12 @@
 """Match a score title to an existing planner number slug (read-only)."""
 
 import re
-from importlib.resources import files
 from pathlib import Path
 
 import yaml
 from rapidfuzz import fuzz, process
+
+from .data import load
 
 MIN_SCORE = 85
 
@@ -21,8 +22,7 @@ def _normalise(text: str) -> str:
 
 def _known_aliases() -> dict[str, list[str]]:
     """slug -> alternative titles, from data/title_aliases.yaml."""
-    raw = (files("score_parser") / "data" / "title_aliases.yaml").read_text()
-    return yaml.safe_load(raw)["aliases"]
+    return load("title_aliases.yaml")["aliases"]
 
 
 def _names_for(slug: str, numbers_dir: Path, aliases: dict[str, list[str]]) -> set[str]:

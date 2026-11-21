@@ -7,11 +7,9 @@ Staff bands come from the label column at the left margin; each stack of labels
 import re
 from dataclasses import dataclass, field
 from functools import cache
-from importlib.resources import files
 
-import yaml
-
-from .layout import LINE_TOLERANCE, MARGIN_SLACK, lines
+from .layout import LINE_TOLERANCE, label_stacks, lines
+from .data import load
 from .models import Page, Token
 
 PHRASE_GAP = 20.0  # horizontal gap that separates two annotations on one line
@@ -55,7 +53,7 @@ class System:
 
 @cache
 def _rehearsal_words() -> frozenset[str]:
-    data = yaml.safe_load(files("score_parser.data").joinpath("rehearsal_words.yaml").read_text())
+    data = load("rehearsal_words.yaml")
     return frozenset(w.lower() for w in data["rehearsal_words"])
 
 
@@ -69,36 +67,20 @@ def _phrases(row: list[Token]) -> list[list[Token]]:
     return groups
 
 
-def _label_stacks(rows: list[list[Token]]) -> list[list[list[Token]]]:
-    left = min(ln[0].x0 for ln in rows)
-    column = [ln for ln in rows if ln[0].x0 <= left + MARGIN_SLACK]
-    gaps = [b[0].yc - a[0].yc for a, b in zip(column, column[1:])]
-    if not gaps:
-        return [column]
-    median = sorted(gaps)[len(gaps) // 2]
-    stacks = [[column[0]]]
-    for gap, ln in zip(gaps, column[1:]):
-        if gap > 2.5 * median:
-            stacks.append([])
-        stacks[-1].append(ln)
-    return stacks
-
-
 def find_systems(page: Page) -> list[System]:
-    rows = lines(page.tokens)
-    if not rows:
+    stacks = label_stacks(page)
+    if not stacks:
         return []
-    stacks = _label_stacks(rows)
-    label_rows = {id(ln) for stack in stacks for ln in stack}
-    other_rows = [ln for ln in rows if id(ln) not in label_rows]
-
-    systems = []
-    for i, stack in enumerate(stacks):
-        staves = [Staff(" ".join(t.text for t in ln), ln[0].yc) for ln in stack]
-        systems.append(System(page.number, i, staves))
+    label_tokens = {id(t) for stack in stacks for ln in stack for t in ln.tokens}
+    other_rows = [
+        ln for ln in lines(page.tokens) if not any(id(t) in label_tokens for t in ln)
+    ]
+    systems = [
+        System(page.number, i, [Staff(ln.text, ln.yc) for ln in stack])
+        for i, stack in enumerate(stacks)
+    ]
     for row in other_rows:
-        yc = row[0].yc
-        owner = min(systems, key=lambda s: _distance(s, yc))
+        owner = min(systems, key=lambda s: _distance(s, row[0].yc))
         _place(owner, row)
     return systems
 

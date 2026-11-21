@@ -1,6 +1,6 @@
 """Layout stage: group tokens into lines, find label stacks and instruction text."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .models import Page, Token
 
@@ -13,6 +13,7 @@ STACK_GAP_FACTOR = 2.5
 class TextLine:
     text: str
     yc: float
+    tokens: list[Token] = field(default_factory=list)
 
 
 def lines(tokens: list[Token]) -> list[list[Token]]:
@@ -34,7 +35,7 @@ def _text_lines(page: Page) -> list[list[Token]]:
 
 
 def _as_line(ln: list[Token]) -> TextLine:
-    return TextLine(" ".join(t.text for t in ln), ln[0].yc)
+    return TextLine(" ".join(t.text for t in ln), ln[0].yc, ln)
 
 
 def _split(page: Page) -> tuple[list[list[Token]], list[list[Token]]]:

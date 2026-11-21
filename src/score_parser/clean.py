@@ -3,16 +3,14 @@
 import re
 from dataclasses import replace
 from functools import cache
-from importlib.resources import files
 
-import yaml
-
+from .data import load
 from .models import Page, Token
 
 
 @cache
 def _music_fonts() -> tuple[str, ...]:
-    data = yaml.safe_load(files("score_parser.data").joinpath("music_fonts.yaml").read_text())
+    data = load("music_fonts.yaml")
     return tuple(f.lower() for f in data["music_fonts"])
 
 
