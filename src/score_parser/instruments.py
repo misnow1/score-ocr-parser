@@ -54,3 +54,8 @@ def build_instrumentation(labels: list[str]) -> tuple[list[InstrumentEntry], lis
         entry.chairs = sorted(set(entry.chairs) | set(chairs))
         entry.labels.append(label)
     return list(entries.values()), unknown
+
+
+def vocabulary() -> list[str]:
+    """Every alias, as a custom vocabulary for OCR."""
+    return sorted(_table())

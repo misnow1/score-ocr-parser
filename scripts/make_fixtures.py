@@ -114,6 +114,17 @@ def finale_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def scanned(src: Path, out: Path, dpi: int) -> None:
+    """An image-only PDF: the source page rendered at `dpi`, no text layer."""
+    with pymupdf.open(src) as doc:
+        pix = doc[0].get_pixmap(dpi=dpi, alpha=False)
+        rect = doc[0].rect
+    scan = pymupdf.open()
+    page = scan.new_page(width=rect.width, height=rect.height)
+    page.insert_image(rect, stream=pix.tobytes("png"))
+    scan.save(out, deflate=True)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
@@ -121,6 +132,8 @@ def main() -> None:
         build_music_font(font)
         finale_style(font, OUT / "finale_full_labels.pdf")
         finale_solos(font, OUT / "finale_solos.pdf")
+    for dpi in (300, 90):
+        scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
 
 
 if __name__ == "__main__":
