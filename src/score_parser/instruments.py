@@ -1,7 +1,7 @@
 """Interpret stage: staff label text to canonical instruments."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache
 
 import pymupdf
@@ -16,6 +16,7 @@ _CHAIRS = re.compile(rf"(?:\s+|(?<=\.))({_NUM}(?:\s*(?:-|–|&|,|and)\s*{_NUM})*
 _CHAIR_PART = re.compile(rf"({_NUM})|(-|–)", re.I)
 _TRANSPOSITION = re.compile(r"\bin\s+[a-g][b#♭♯]?(?=\s|$)", re.I)
 _PARENS = re.compile(r"\(([^)]*)\)")
+_COMBINED = re.compile(r",\s*(?=[a-z])", re.I)  # "Trb. 3, Tba.": a comma before a name, not a chair
 
 
 @dataclass
@@ -24,6 +25,7 @@ class Resolved:
     family: str
     chairs: list[int]
     doublings: list[str]
+    also: list["Resolved"] = field(default_factory=list)  # further parts of a combined label
 
 
 @cache
@@ -70,6 +72,16 @@ def resolve(label: str) -> Resolved | None:
             if hit and hit[0] not in doublings:
                 doublings.append(hit[0])
     text = _TRANSPOSITION.sub("", _PARENS.sub(" ", label))
+    parts = [_resolve_part(part) for part in _COMBINED.split(text)]
+    if not parts[0] or None in parts:
+        return None
+    first, *rest = parts
+    first.doublings = doublings
+    first.also = rest
+    return first
+
+
+def _resolve_part(text: str) -> Resolved | None:
     chairs: list[int] = []
     m = _CHAIRS.search(text)
     if m:
@@ -78,7 +90,7 @@ def resolve(label: str) -> Resolved | None:
     hit = _table().get(_normalise(text))
     if hit is None:
         return None
-    return Resolved(hit[0], hit[1], chairs or [1], doublings)
+    return Resolved(hit[0], hit[1], chairs or [1], [])
 
 
 def instruction_doublings(text: str) -> list[str]:
@@ -119,16 +131,17 @@ def resolve_against_first_system(label: str, first_chairs: dict[str, set[int]]) 
     hit = resolve(label)
     if hit is None:
         return LabelCheck(None, f"label '{label}' is not recognised")
-    if hit.name not in first_chairs:
-        return LabelCheck(
-            hit, f"label '{label}' ({hit.name}) is not in the first-system instrumentation"
-        )
-    if not set(hit.chairs) <= first_chairs[hit.name]:
-        return LabelCheck(
-            hit,
-            f"label '{label}' has chairs {hit.chairs} outside "
-            f"the first system's {sorted(first_chairs[hit.name])} for {hit.name}",
-        )
+    for part in [hit, *hit.also]:
+        if part.name not in first_chairs:
+            return LabelCheck(
+                hit, f"label '{label}' ({part.name}) is not in the first-system instrumentation"
+            )
+        if not set(part.chairs) <= first_chairs[part.name]:
+            return LabelCheck(
+                hit,
+                f"label '{label}' has chairs {part.chairs} outside "
+                f"the first system's {sorted(first_chairs[part.name])} for {part.name}",
+            )
     return LabelCheck(hit, None)
 
 
@@ -183,7 +196,8 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
         if hit is None:
             unknown.append(line.text)
         else:
-            add(line.text, hit)
+            for part in [hit, *hit.also]:
+                add(line.text, part)
 
     first_chairs = {name: set(e.chairs) for name, e in entries.items()}
     for number, stack in (st for i, st in enumerate(stacks) if i != first):
@@ -194,7 +208,8 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
             if check.problem:
                 warnings[f"Page {number}: {check.problem}"] = None
             else:
-                add(line.text, check.hit)
+                for part in [check.hit, *check.hit.also]:
+                    add(line.text, part)
 
     for page in pages:
         page_labels = [ln for n, st in stacks if n == page.number for ln in st]

@@ -23,7 +23,7 @@ instruments:
     aliases: [bass clarinet, b cl, bs cl]
   - name: Soprano Sax
     family: Saxophone
-    aliases: [soprano saxophone, soprano sax, soprano sx, s sx, s sax]
+    aliases: [soprano saxophone, soprano sax, soprano sx, s sx, s sax, sop sax, sop sx]
   - name: Alto Sax
     family: Saxophone
     aliases: [alto saxophone, alto sax, alto sx, a sx, a sax, alto]
@@ -48,7 +48,7 @@ instruments:
     aliases: [french horn, french horns, horn, horns, hn, hns]
   - name: Trombone
     family: Trombone
-    aliases: [trombone, trombones, tbn, tbns, tromb]
+    aliases: [trombone, trombones, tbn, tbns, tromb, trb, trbs]
   - name: Bass Trombone
     family: Trombone
     aliases: [bass trombone, b tbn, bass tbn]
@@ -57,13 +57,13 @@ instruments:
     aliases: [piano, pno, pf]
   - name: Organ
     family: Rhythm
-    aliases: [organ, org]
+    aliases: [organ, org, rock organ, electric organ, e org]
   - name: Guitar
     family: Rhythm
-    aliases: [guitar, gtr, electric guitar, e gtr]
+    aliases: [guitar, guitars, gtr, gtrs, electric guitar, e gtr, acoustic guitar, ac gtr, a gtr, lead guitar, ld gtr]
   - name: Bass
     family: Rhythm
-    aliases: [bass, double bass, acoustic bass, upright bass, bs]
+    aliases: [bass, double bass, acoustic bass, upright bass, bs, db]
   - name: Electric Bass
     family: Rhythm
     aliases: [electric bass, bass guitar, e bass, e b, eb]
@@ -87,4 +87,10 @@ instruments:
     aliases: [cello, cellos, violoncello, vc, vcl]
   - name: Lead Vocal
     family: Vocal
-    aliases: [lead vocal, lead vocals, lead voc, l voc, lead vox, vocal, vocals, voc, vox]
+    aliases: [lead vocal, lead vocals, lead voc, l voc, lead vox, ld vox, vocal, vocals, vcls, voc, vox]
+  - name: Synthesizer
+    family: Rhythm
+    aliases: [synthesizer, synthesiser, synth]
+  - name: Sleigh Bells
+    family: Rhythm
+    aliases: [sleigh bells, sleigh bell, s bells]
