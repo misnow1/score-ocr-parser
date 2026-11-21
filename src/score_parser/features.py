@@ -7,6 +7,7 @@ the next systems and pages), `build_feature` turns each group into one Feature.
 
 import re
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from .layout import is_chord_symbol, running_headers
 from .instruments import resolve_against_first_system
@@ -76,6 +77,18 @@ def _current_mark(systems: list[System], system: System, x: float) -> str | None
     return current
 
 
+@dataclass(frozen=True)
+class MergeKey:
+    """What copies of one solo share: the instrument when one could be named;
+    otherwise the text and staff (copies of a named text share a key whatever
+    staff they sit above)."""
+
+    kind: FeatureKind
+    instrument: str | None
+    text: str  # empty when the instrument is named
+    staff: str  # empty when the instrument is named
+
+
 @dataclass
 class Candidate:
     """One solo wording on one system, before copies are merged."""
@@ -86,7 +99,7 @@ class Candidate:
     evidence: float  # confidence earned by the instrument
     reasons: list[str]
     page: int
-    order: int  # position of the system in reading order
+    system_index: int  # position of the system in reading order
     x: float
     bar: int | None
     bar_certain: bool
@@ -94,13 +107,11 @@ class Candidate:
     staff: str  # the staff below the text; empty when the text names an absent instrument
 
     @property
-    def key(self) -> tuple:
-        """Copies of one solo share it: the instrument, or the text and staff
-        when no instrument could be named (copies of a named text share a key
-        whatever staff they sit above)."""
+    def key(self) -> MergeKey:
+        """Copies of one solo share it."""
         if self.instrument:
-            return (self.kind, self.instrument)
-        return (self.kind, self.text.lower(), self.staff)
+            return MergeKey(self.kind, self.instrument, "", "")
+        return MergeKey(self.kind, None, self.text.lower(), self.staff)
 
     @property
     def confidence(self) -> float:
@@ -109,17 +120,28 @@ class Candidate:
         return self.evidence + (BAR_FOUND if self.bar_certain else BAR_GUESSED)
 
 
+class SystemContext(NamedTuple):
+    """Where a wording was found: the document's systems, which of them, and
+    the first system's chairs that instruments are checked against."""
+
+    systems: list[System]
+    index: int
+    first_chairs: dict[str, set[int]]
+
+    @property
+    def system(self) -> System:
+        return self.systems[self.index]
+
+
 def _candidate(
     kind: FeatureKind,
     prefix: str,
     text: str,
-    first_chairs: dict[str, set[int]],
-    systems: list[System],
-    index: int,
+    context: SystemContext,
     phrase: Phrase,
     notes: list[str],
 ) -> Candidate:
-    system = systems[index]
+    system, first_chairs = context.system, context.first_chairs
     staff = system.staff_for(phrase.yc)
     reasons = [f"matched {kind} wording"]
     evidence = BASE
@@ -163,11 +185,11 @@ def _candidate(
         evidence=evidence,
         reasons=reasons + notes,
         page=system.page,
-        order=index,
+        system_index=context.index,
         x=phrase.x0,
         bar=bar,
         bar_certain=certain,
-        mark=_current_mark(systems, system, phrase.x0),
+        mark=_current_mark(context.systems, system, phrase.x0),
         staff=staff_label,
     )
 
@@ -187,7 +209,9 @@ def collect_candidates(
             notes: list[str] = []
             kind, prefix = hit
             candidates.append(
-                _candidate(kind, prefix, text, first_chairs, systems, index, phrase, notes)
+                _candidate(
+                    kind, prefix, text, SystemContext(systems, index, first_chairs), phrase, notes
+                )
             )
             for note in notes:
                 warnings[f"Page {system.page}: solo/feature '{text}': {note}"] = None
@@ -199,10 +223,10 @@ def merge_candidates(candidates: list[Candidate]) -> list[list[Candidate]]:
     key when that group was last seen on the same system or the one before it
     (a copy on another staff, or a reminder on the next system or page)."""
     groups: list[list[Candidate]] = []
-    latest: dict[tuple, list[Candidate]] = {}
+    latest: dict[MergeKey, list[Candidate]] = {}
     for c in candidates:
         group = latest.get(c.key)
-        if group is None or c.order - group[-1].order > 1:
+        if group is None or c.system_index - group[-1].system_index > 1:
             group = latest[c.key] = []
             groups.append(group)
         group.append(c)

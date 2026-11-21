@@ -38,6 +38,6 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
         features=features,
         flow=build_flow(features),
         unknown_labels=instrumentation.unknown_labels,
-        pages=[PageInfo(p.number, p.source, p.ocr_confidence, p.dpi, p.reason, p.rotation) for p in pages],
+        pages=[PageInfo.from_page(p) for p in pages],
         warnings=warnings,
     )

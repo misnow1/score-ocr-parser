@@ -65,6 +65,12 @@ class PageInfo:
     reason: PageReason = "text"
     rotation: int = 0
 
+    @classmethod
+    def from_page(cls, page: "Page") -> "PageInfo":
+        return cls(
+            page.number, page.source, page.ocr_confidence, page.dpi, page.reason, page.rotation
+        )
+
 
 @dataclass
 class Location:
