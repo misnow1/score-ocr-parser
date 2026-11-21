@@ -34,7 +34,7 @@ def test_filename_noise_is_removed(tmp_path, filename, title):
 
 
 def test_page_one_large_text_is_the_fallback_when_filename_is_all_noise(tmp_path):
-    report = parse_as(tmp_path, "SCORE 2026 copy.pdf")
+    report = parse_as(tmp_path, "SCORE 2026 copy.pdf", "finale_full_labels.pdf")
 
     assert report.title == "Synthetic Tune"
     assert report.title_source == "page 1"
