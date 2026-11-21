@@ -21,7 +21,7 @@ uv run score-parser inspect SCORE.pdf --page 1 [--tokens | --layout] [--force-oc
 ```
 
 - `parse` writes, per PDF, the JSON report `<score>.json` and/or the flow draft `<name>.yaml` into the output directory (default `out/`, git-ignored), chosen by `--format` (`json` default, `yaml`, or `both`), and prints a summary table (see Folder runs).
-- `inspect` prints one page's cleaned tokens (default) or the label column and lines to stdout. It never writes files.
+- `inspect` prints one page's cleaned tokens (default) or the label stacks and lines to stdout. It never writes files.
 
 Library use:
 
@@ -35,7 +35,7 @@ Scanned (image-only) pages are detected automatically (almost no text words plus
 
 Current scope: text-layer PDFs and scans. The report lists the instruments on the first system (full names), with:
 
-- chairs, expanded from ranges ("1-4", "i & II");
+- chairs, expanded from ranges ("1-4", "1–4", "Tbn.1-4", "i & II");
 - doublings, from labels ("Flute (Oboe) 1-3") and from instruction text ("to Flute", "piccolo trpt"; a "Mute" marking is ignored). An instruction is attached to the staff label nearest to it vertically;
 - non-standard instruments (violin, viola, cello, organ, guitars, lead vocal, flugelhorn, piccolo trumpet, and others in the alias table).
 
@@ -43,7 +43,7 @@ Abbreviated labels on later systems ("A. Sx. 1", "Tbn. 1-4", "E.B.", "D. S.") ar
 
 Music-font glyphs are removed before reading: private-use characters, and any token set in a font listed in `music_fonts.yaml` (Sibelius Opus glyphs look like plain ASCII, so only the font name identifies them). The alias table (`aliases.yaml`) and music-font list are editable data in `src/score_parser/data/`.
 
-Solo and feature detection: `report.features` lists every solo or feature marking ("ALTO SOLO", "1x - Solo", "Male vocal solo", "vamp for drum feature") with kind, instrument (from the text, else from the staff it sits on), page, nearest bar number, current rehearsal mark, raw text, confidence and reasons. Layout analysis finds systems (stacks of left-margin labels), staff bands, bar numbers and rehearsal marks (single capitals and section words listed in `data/rehearsal_words.yaml`), and splits glued tokens such as "29ALTO SOLO".
+Solo and feature detection: `report.features` lists every solo or feature marking ("ALTO SOLO", "1x - Solo", "Male vocal solo", "vamp for drum feature") with kind, instrument (from the text, else from the staff it sits on; only instruments in the first-system instrumentation, anything else is dropped with a warning), page, nearest bar number, current rehearsal mark, raw text, confidence and reasons. Layout analysis finds systems (stacks of left-margin labels), staff bands, bar numbers and rehearsal marks (single capitals and section words listed in `data/rehearsal_words.yaml`), and splits glued tokens such as "29ALTO SOLO". A vocal feature needs the word male, female, vocal or vox directly before the solo wording; "male" or "female" alone scores lower than "vocal" or "vox". Text left of every bar number on its system takes the first bar with lower confidence and a reason saying so.
 
 Flow draft (`--format yaml`, or `report.flow`): a `flow:` block in the shape mic-assignment-planner uses in `numbers/*.yaml`. One step per feature, each with `section` ("Alto Sax solo (B)"), `instrument` (lower case) and a `note` giving page, bar, rehearsal mark and confidence. Steps below 0.8 confidence, or with no instrument, are followed by a `# TODO(score-parser)` comment giving the reasons. The draft never contains `kind` (vocal or instrumental) or `position` (DS1-DS5); those stay with the planner.
 
@@ -51,7 +51,7 @@ Title: the filename with noise removed ("SCORE", dates, years, "AJC", "copy", "(
 
 `--numbers-dir DIR` (or `ParseOptions(numbers_dir=...)`) points at the planner's `numbers/` folder, which is only read. The title is fuzzy-matched (rapidfuzz) against the slugs, each file's `title:` and the known aliases in `data/title_aliases.yaml` (First Noel = First Nowell, Superstition = Super Christmas). A match names the draft `<slug>.yaml` (`report.matched_slug`). With no match the draft is named `UNMATCHED-<title-slug>.yaml` and starts with an `UNMATCHED` comment. Without `--numbers-dir` the draft is named for the title slug. `parse` refuses an output directory inside the numbers directory, so it never writes into the planner repo.
 
-Folder runs: `parse` accepts folders (every `*.pdf` in them) and files together. After the run it prints a summary table with one row per score: instrument count, feature count and warning count, so charts that need a manual look stand out. Warning text goes to stderr. A score that fails to parse does not stop the run: its row shows `FAILED`, the error goes to stderr, and the exit code is 1 (0 when every score parsed).
+Folder runs: `parse` accepts folders (every `*.pdf` in them, any letter case) and files together. After the run it prints a summary table with one row per score: instrument count, feature count and warning count, so charts that need a manual look stand out. If two scores would write the same output file name (for example the same matched slug), the later one gets `-2`, `-3` and so on, and a warning says so. Warning text goes to stderr. A score that fails to parse does not stop the run: its row shows `FAILED`, the error goes to stderr, and the exit code is 1 (0 when every score parsed).
 
 ## Corpus tests
 
