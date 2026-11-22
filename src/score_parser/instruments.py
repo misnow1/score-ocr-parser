@@ -14,6 +14,7 @@ from .models import InstrumentEntry, Page, Token
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
 _NUM = r"(?:\d+|i{1,3}|iv|v)"
 _CHAIRS = re.compile(rf"(?:\s+|(?<=\.))({_NUM}(?:\s*(?:-|–|&|,|and)\s*{_NUM})*)\s*$", re.I)
+_LEADING_CHAIRS = re.compile(rf"^({_NUM}(?:\s*(?:-|–|&|,)\s*{_NUM})*)\s+(?=[a-z])", re.I)  # "1&2 B Tpt."
 _CHAIR_PART = re.compile(rf"({_NUM})|(-|–)", re.I)
 _TRANSPOSITION = re.compile(r"\bin\s+[a-g][b#♭♯]?(?=\s|$)", re.I)
 _PARENS = re.compile(r"\(([^)]*)\)")
@@ -27,6 +28,13 @@ class Resolved:
     chairs: list[int]
     doublings: list[str]
     also: list["Resolved"] = field(default_factory=list)  # further parts of a combined label
+    chairs_given: bool = False  # the label printed a chair; `chairs` is [1] otherwise
+    shared: bool = False  # one staff for every chair ("Gtrs."), or several chairs given
+
+    @property
+    def single_chair(self) -> int | None:
+        """The one chair the label states, or None (none printed, or several)."""
+        return self.chairs[0] if self.chairs_given and len(self.chairs) == 1 else None
 
     def parts(self) -> list["Resolved"]:
         """This instrument and the further parts of a combined label."""
@@ -41,6 +49,11 @@ def _data() -> list[dict]:
 @cache
 def _table() -> dict[str, tuple[str, str]]:
     return {alias: (i["name"], i["family"]) for i in _data() for alias in i["aliases"]}
+
+
+@cache
+def _shared_aliases() -> frozenset[str]:
+    return frozenset(a for i in _data() for a in i.get("shared_aliases", []))
 
 
 @cache
@@ -104,13 +117,19 @@ def resolve(label: str) -> Resolved | None:
 def _resolve_part(text: str) -> Resolved | None:
     chairs: list[int] = []
     m = _CHAIRS.search(text)
+    lead = _LEADING_CHAIRS.match(text.strip())
     if m:
         chairs = _chairs(m.group(1))
         text = text[: m.start()]
-    hit = _table().get(_normalise(text))
+    elif lead:
+        chairs = _chairs(lead.group(1))
+        text = text.strip()[lead.end() :]
+    alias = _normalise(text)
+    hit = _table().get(alias)
     if hit is None:
         return None
-    return Resolved(hit[0], hit[1], chairs or [1], [])
+    shared = len(chairs) > 1 or alias in _shared_aliases()
+    return Resolved(hit[0], hit[1], chairs or [1], [], chairs_given=bool(chairs), shared=shared)
 
 
 def instruction_doublings(text: str) -> list[str]:

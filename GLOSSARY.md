@@ -7,21 +7,24 @@
 - **Music-font glyph**: a clef, note, rest or accidental drawn from a notation font (private-use characters, or ordinary characters set in a notation font such as Opus, Maestro or Finale Jazz; a word with an empty font name made only of glyph characters counts too). Tested in one place, `is_music`, and removed in the clean stage.
 - **Staff label**: the instrument name at the left of a staff. Full names appear on the first system, abbreviations on later ones.
 - **Label column**: the staff labels at the left of the staves. Found from a shared right edge (labels are usually right-aligned) or left edge, then each line is cut to its label at the first big gap, glyph residue, chord symbol or time signature. A trailing time signature ("44") is never a chair.
+- **Overprinted label**: two labels printed over each other on one line. Read as two lines, upper first.
+- **Unlabeled staff**: a staff (a clef at the staff-start column) with no label near it. Reported once per score as a warning.
 - **Label stack**: the staff labels of the label column for one system, top to bottom. A large vertical gap starts a new stack.
 - **Running header**: a long line repeating on several pages (the title with a page number). Not a staff label.
-- **Group label**: a section or score tag in the label column ("Score 5", "Trumpets"). Not a staff label.
+- **Group label**: a section or score tag in the label column ("Score 5", "Trumpets", "TBNS"). Not a staff label. Nor are cue notes in the column ("(Memory out front)", "Drums only......", "Swing Feel in 8ths").
 - **First system**: the label stack on the first page that has any resolving label, with the most labels that resolve.
 - **System**: one row of staves across the page.
 - **Staff band**: the vertical position of one staff in a system, taken from its label.
 - **Bar**: a measure, identified by the bar number printed above the top staff. Numbers are printed sparsely, so a feature's bar is counted from the nearest printed number by the drawn barlines between them (text-layer pages; see ADR 0002), else it is the nearest number at or left of its text. Only a number in the bar row (just above the top staff) that fits the rising sequence counts; time signatures, headers and triplet numbers are not bars.
 - **Barline**: a vertical rule drawn through a system's staves, read from the PDF's vector drawings (text-layer pages only). Rules within 4 pt (double and final barlines) are one.
 - **Row of bars**: one run of bars across the page. Stacks of one system share a row when barlines run unbroken between them; a row without a printed number continues from the row before.
-- **Rehearsal mark**: a single capital letter or a section word ("VERSE") above a system. A feature reports the latest mark at or before it.
+- **Rehearsal mark**: a single capital letter or a section word ("VERSE") above a system. A feature reports the latest mark at or before it on the same page; a mark never carries onto another page.
 - **Instrumentation**: the instruments on the first system (full names), with chairs and doublings. Features may only name instruments in it.
 - **Recurring instrument**: an instrument the first system lacks that labels two or more later systems. It joins the instrumentation; a one-off later label for a missing instrument still warns.
 - **Combined label**: one staff label naming several instruments ("Trb. 3, Tba."). Each part is resolved and cross-checked on its own; a solo marked above such a staff is not assigned to any one part.
 - **Instrument variant**: a canonical name that counts as the same instrument as another for the later-system cross-check (Bass and Electric Bass). One rule, `present_as`, data in `instrument_variants.yaml`.
-- **Chair**: a numbered seat within a section ("Trumpet 2"). Not an instrument.
+- **Chair**: a numbered seat within a section ("Trumpet 2"). Not an instrument. A feature carries its chair when the marking text or its staff gives one.
+- **Shared staff**: one staff printed for several chairs ("Gtrs.", "Guitars", "Gtr. 1 & 2"). A feature on it has an ambiguous chair, reported as such and never guessed.
 - **Canonical instrument**: the normalised name from the alias table ("Alto Sax").
 - **Unknown label**: a staff label the alias table cannot resolve. Reported, never guessed.
 - **Doubling**: a second instrument a player picks up.

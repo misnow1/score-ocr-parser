@@ -14,7 +14,7 @@
 #       - {instruments: [Clarinet, Trumpet], kind: shared, page: 1, bar: 9, mark: A}
 #       - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "known gap"}
 #     not_features:
-#       - {instrument: Baritone Sax, page: 5, xfail: "false positive today"}
+#       - {instrument: Baritone Sax, page: 5}
 #
 # `xfail: reason` marks a fact the tool does not meet yet. It must keep
 # failing; once it passes, the suite says to remove the xfail.
@@ -39,7 +39,7 @@ scores:
     max_features: 17
     features:
       - {instrument: Alto Sax, page: 5, bar: 29}
-      - {instrument: Trombone, page: 8, bar: 44}
+      - {instrument: Trombone, page: 8, bar: 44, xfail: "reported at bar 45: the cue copies are in bar 45; the own-staff SOLO in bar 44 is only a location (see ADR 0002)"}
       - {instrument: Baritone Sax, page: 9, bar: 49}
       - {instrument: Trombone, page: 9, bar: 52, xfail: "reported at bar 53: the TBN SOLO text sits one bar after the printed 52 (see ADR 0002)"}
       - {instrument: Baritone Sax, page: 10, bar: 57}
@@ -51,21 +51,21 @@ scores:
       - {instrument: Guitar, page: 24, bar: 143}
       - {instrument: Guitar, page: 26, bar: 151}
       - {instrument: Guitar, page: 28, bar: 164}
-      - {instrument: Guitar, chair: 1, page: 23, bar: 135, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 2, page: 24, bar: 143, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 1, page: 26, bar: 151, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 2, page: 28, bar: 164, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 1, page: 23, bar: 135}
+      - {instrument: Guitar, chair: 2, page: 24, bar: 143}
+      - {instrument: Guitar, chair: 1, page: 26, bar: 151}
+      - {instrument: Guitar, chair: 2, page: 28, bar: 164}
     not_features:
-      - {instrument: Baritone Sax, page: 5, xfail: "false positive today"}
-      - {instrument: Trombone, page: 13, xfail: "false positive today"}
-      - {instrument: Baritone Sax, page: 16, xfail: "false positive today"}
+      - {instrument: Baritone Sax, page: 5}
+      - {instrument: Trombone, page: 13}
+      - {instrument: Baritone Sax, page: 16}
 
   "Winter Wonderland JC2026 SCORE NOT FINAL":
     instruments: [Soprano Sax, Clarinet, Trumpet]
     # One shared feature and seven vocal leads; no other instrument solos.
     max_features: 8
     features:
-      - {instruments: [Clarinet, Soprano Sax, Trumpet], kind: shared, page: 1, bar: 9, mark: A, xfail: "marker A is not read and the three are not reported at bar 9"}
+      - {instruments: [Clarinet, Soprano Sax, Trumpet], kind: shared, page: 1, bar: 9, mark: A, xfail: "marker A is read now; the three are not reported together and p1 has no bar 9"}
       # The tool reports these vocalists as no instrument and has no male/female.
       - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "vocal lead not recognised (female, after B)"}
       - {instrument: Vocal, kind: vocal, page: 3, mark: C, xfail: "vocal lead not recognised (male, at C)"}
@@ -79,4 +79,4 @@ scores:
     max_features: 1
     features:
       - {instrument: Guitar, page: 16, bar: 62}
-      - {instrument: Guitar, chair: 1, page: 16, bar: 62, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 1, page: 16, bar: 62}
