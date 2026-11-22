@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, replace
 from typing import Literal, NamedTuple
 
-from .layout import is_chord_symbol, running_headers
+from .layout import count_chords, is_chord_symbol, running_headers, strip_chord_run
 from .instruments import Roster, resolve, resolve_against_first_system
 from .models import Feature, FeatureKind, Location, Page, Participant, Voice
 from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
@@ -38,6 +38,7 @@ BAR_EVIDENCE: dict[BarKind, float] = {
     "ocr": BAR_GUESSED,  # barlines cannot be counted on a scan
     "missing": 0.0,
 }
+CHORD_ONLY_WORDING = 0.1  # penalty: the wording was a chord plus a bare "Solo"
 INSTRUMENT_ABSENT = 0.1  # named in the text but not in the instrumentation: a possible feature
 VOICE_NAMED = 0.3  # a vocal lead whose text names the voice ("Female Lead")
 VOICE_FROM_STAFF = 0.15  # a bare "solo" above a Voice Lead F/M staff
@@ -87,7 +88,8 @@ def _absent_instrument(prefix: str) -> str | None:
 
 def strip_chords(text: str) -> str:
     """The phrase without chord symbols ("F6 TENOR SOLO" -> "TENOR SOLO")."""
-    return " ".join(w for w in text.split() if not is_chord_symbol(w))
+    words = (strip_chord_run(w) for w in text.split() if not is_chord_symbol(w))
+    return " ".join(w for w in words if w)
 
 
 def _match(text: str) -> tuple[FeatureKind, str] | None:
@@ -357,6 +359,9 @@ def collect_candidates(
     for index, system in enumerate(systems):
         for phrase in system.texts:
             text = strip_chords(phrase.text)
+            chord_only = text != phrase.text and _match(text) == ("solo", "")
+            if chord_only and sum(map(count_chords, phrase.text.split())) > 1:
+                continue  # several chords over a bare "Solo": a chart label, not a feature
             context = SystemContext(systems, index, roster)
             vocal = _vocal_wording(context, phrase, text, roster)
             if vocal is _DROPPED:
@@ -369,9 +374,11 @@ def collect_candidates(
                 continue
             notes: list[str] = []
             kind, prefix = hit
-            candidates.append(
-                _candidate(kind, prefix, text, context, phrase, notes)
-            )
+            candidate = _candidate(kind, prefix, text, context, phrase, notes)
+            if chord_only:  # one chord plus "Solo": kept, but only as a possible feature
+                candidate.evidence -= CHORD_ONLY_WORDING
+                candidate.reasons.append("wording was only chord text plus 'Solo'")
+            candidates.append(candidate)
             for note in notes:
                 warnings[f"Page {system.page}: solo/feature '{text}': {note}"] = None
     return candidates, list(warnings)

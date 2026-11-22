@@ -138,3 +138,25 @@ def test_possible_feature_gets_a_todo_in_the_flow_draft(tmp_path):
     text = path.read_text()
     assert "violin" in text.lower()
     assert "# TODO(score-parser)" in text and "not in this score's instrumentation" in text
+
+
+def test_chord_text_glued_to_solo_wording_is_stripped_and_never_makes_a_feature():
+    report = parse_score(FIXTURES / "finale_chord_text_solos.pdf")
+
+    got = sorted((f.instrument, f.page, f.raw_text) for f in report.features)
+    # several chords before a bare "Solo" (glued "F#min7(b5)/EE9 Solo", "E9 Dm7Solo" is one) are a chart label, not a feature,
+    # nor is a lone chord ("G7C"); named solos keep their wording without the chords
+    assert got == [
+        ("Alto Sax", 1, "ALTO SOLO"),
+        ("Guitar", 2, "SOLO"),  # one chord before a bare SOLO: kept, see the next test
+        ("Trombone", 1, "TBN SOLO"),
+    ]
+
+
+def test_one_chord_before_a_bare_solo_is_a_low_confidence_possible_feature():
+    report = parse_score(FIXTURES / "finale_chord_text_solos.pdf")
+
+    guitar = next(f for f in report.features if f.page == 2)
+    assert guitar.confidence < 0.8
+    assert any("only chord text plus 'Solo'" in r for r in guitar.reasons)
+    assert any(step.todo for step in report.flow if "Guitar" in step.section)

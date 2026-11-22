@@ -157,8 +157,8 @@ scores:
       - Drums
     # One feature: a group of solos over bars 45-77 inside a repeat (the "(SOLOS)" marking is printed
     # over every staff but the organ and drums; bar 77 is marked "lead only"). Who plays is not clear, so
-    # it is one open solo with no instrument. The tool reports it once (p2, bar 45) plus one false positive,
-    # a guitar solo built from chord text (p4, bar 93), so the cap is 2; lower it to 1 when that goes.
-    max_features: 2
+    # it is one open solo with no instrument. The tool reports it once (p2, bar 45); the guitar solo built
+    # from chord text (p4, bar 93) is dropped (two chords before a bare "Solo").
+    max_features: 1
     features:
       - {open: true, page: 2, bar: 45}
