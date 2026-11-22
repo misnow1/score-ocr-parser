@@ -542,7 +542,7 @@ def right_aligned(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
-def _repair_system(page, music_font, rows, right=130.0) -> None:
+def _repair_system(page, music_font, rows, right=130.0, glyph_x=140.0) -> None:
     """Right-aligned label rows (label text or None for a staff without a label,
     or ("noise", text) for a non-label line that has no staff). Each staff gets a
     clef glyph at x=140 and a rule."""
@@ -554,8 +554,24 @@ def _repair_system(page, music_font, rows, right=130.0) -> None:
             continue
         if row is not None:
             _right_label(page, right, y, row)
-        page.draw_line((150, y), (580, y))
-        page.insert_text((140, y), MUSIC_GLYPHS, fontfile=str(music_font), fontname="SynMusic", fontsize=14)
+        page.draw_line((max(150, glyph_x + 10), y), (580, y))
+        page.insert_text((glyph_x, y), MUSIC_GLYPHS, fontfile=str(music_font), fontname="SynMusic", fontsize=14)
+
+
+def label_repair_ocr_misreads(music_font: Path, out: Path) -> None:
+    """Staff labels as OCR misreads them: a capital I glued to the name for chair 1
+    ("TRUMPETI", "TENOR SAXI"), a bar number beside a label ("TROMBONE 29"), and a
+    later page repeating the full name with a chair the first system lacks."""
+    doc = pymupdf.open()
+    first = ["TENOR SAXI", "TRUMPETI", "TRUMPET 2", "TRUMPET 3", "TROMBONEI", "TROMBONE 29", "TROMBONE 3"]
+    later = ["TENOR SAXI", "TRUMPETI", "TRUMPET 2", "TRUMPET 3", "TRUMPET 4", "TROMBONE 2", "TROMBONE 4"]
+    for labels in (first, later):
+        page = doc.new_page(width=612, height=792)
+        page.insert_text((200, 60), "Synthetic Misread Tune", fontname="helv", fontsize=14)
+        page.insert_text((160, 95), "1", fontname="helv", fontsize=7)
+        # Clefs sit well right of the labels so OCR does not read them as label text.
+        _repair_system(page, music_font, [(120 + i * 36.0, t) for i, t in enumerate(labels)], glyph_x=165.0)
+    doc.save(out)
 
 
 def label_repair_missing(music_font: Path, out: Path) -> None:
@@ -783,6 +799,7 @@ def main() -> None:
         repeated_solos(font, OUT / "finale_repeated_solos.pdf")
         label_repair_missing(font, OUT / "label_repair_missing.pdf")
         label_repair_noise(font, OUT / "label_repair_noise.pdf")
+        label_repair_ocr_misreads(font, OUT / "label_repair_ocr_misreads.pdf")
         label_repair_unlabeled(font, OUT / "label_repair_unlabeled.pdf")
         label_repair_overprint(font, OUT / "label_repair_overprint.pdf")
         rehearsal_marks(font, OUT / "rehearsal_marks.pdf")
@@ -799,6 +816,7 @@ def main() -> None:
         folded_solos(font, OUT / "finale_folded_solos.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
+    scanned(OUT / "label_repair_ocr_misreads.pdf", OUT / "scan_label_misreads.pdf", 300)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")
     for rotation in (90, 270):
         rotated_scan(OUT / "finale_full_labels.pdf", OUT / f"scan_rotated_{rotation}.pdf", rotation)

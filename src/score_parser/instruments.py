@@ -19,6 +19,8 @@ _LEADING_CHAIRS = re.compile(rf"^({_NUM}(?:\s*(?:-|–|&|,)\s*{_NUM})*)\s+(?=[a-
 _CHAIR_PART = re.compile(rf"({_NUM})|(-|–)", re.I)
 _TRANSPOSITION = re.compile(r"\bin\s+[a-g][b#♭♯]?(?=\s|$)", re.I)
 _PARENS = re.compile(r"\(([^)]*)\)")
+_GLUED_CHAIR = re.compile(r"^(.*[A-Za-z])([Il|1-9])$")  # "TRUMPETI", "TENOR SAXI", "TRUMPET1": a chair glued to the name
+MAX_CHAIR = 9  # a bigger number beside a label is a bar number, not a chair
 _COMBINED = re.compile(r",\s*(?=[a-z])", re.I)  # "Trb. 3, Tba.": a comma before a name, not a chair
 
 
@@ -31,6 +33,7 @@ class Resolved:
     also: list["Resolved"] = field(default_factory=list)  # further parts of a combined label
     chairs_given: bool = False  # the label printed a chair; `chairs` is [1] otherwise
     shared: bool = False  # one staff for every chair ("Gtrs."), or several chairs given
+    full_name: bool = False  # printed as the canonical name ("Trumpet"), not abbreviated ("Tpt.")
 
     @property
     def single_chair(self) -> int | None:
@@ -132,10 +135,20 @@ def _resolve_part(text: str) -> Resolved | None:
         text = text.strip()[lead.end() :]
     alias = _normalise(text)
     hit = _table().get(alias)
+    if hit is None and (glued := _GLUED_CHAIR.match(text.strip())) and not chairs:
+        # OCR reads the capital I of chair 1 as part of the name, or a digit runs on.
+        alias = _normalise(glued.group(1))
+        hit = _table().get(alias)
+        mark = glued.group(2)
+        chairs = [int(mark) if mark.isdigit() else 1]
     if hit is None:
         return None
+    chairs = [c for c in chairs if c <= MAX_CHAIR]  # a bar number beside the label
     shared = len(chairs) > 1 or alias in _shared_aliases()
-    return Resolved(hit[0], hit[1], chairs or [1], [], chairs_given=bool(chairs), shared=shared)
+    return Resolved(
+        hit[0], hit[1], chairs or [1], [], chairs_given=bool(chairs), shared=shared,
+        full_name=alias == hit[0].lower(),
+    )
 
 
 def instruction_doublings(text: str) -> list[str]:
@@ -187,10 +200,12 @@ def _check_part(part: Resolved, label: str, roster: Roster) -> tuple[Resolved, s
     if same is None and (rec := present_as(part.name, roster.recurring)):
         return replace(part, name=rec), None  # recurring: a normal instrument of the score
     if same is not None:
-        part = replace(part, name=same)
+        part = replace(part, name=same, full_name=part.full_name and same == part.name)
     if part.name not in roster.first_chairs:
         return part, f"label '{label}' ({part.name}) is not in the first-system instrumentation"
-    if not set(part.chairs) <= roster.first_chairs[part.name]:
+    # A full name repeated on a later page is not abbreviated, so a chair the
+    # first system lacks is a chair of that section, not a mismatch.
+    if not part.full_name and not set(part.chairs) <= roster.first_chairs[part.name]:
         return part, (
             f"label '{label}' has chairs {part.chairs} outside "
             f"the first system's {sorted(roster.first_chairs[part.name])} for {part.name}"

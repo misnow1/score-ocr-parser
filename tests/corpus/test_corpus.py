@@ -102,17 +102,21 @@ def _with_xfail(fact: dict, problem: str | None) -> list[str]:
 def check_facts(report, facts: dict) -> list[str]:
     """Return a list of human-readable mismatches (empty when all facts hold).
 
-    Keys: instruments (names or {name, xfail}); features (exact page, bar, mark,
+    Keys: instruments (names or {name, chairs, xfail}; chairs match exactly); features (exact page, bar, mark,
     kind, chair, voice, one `instrument` or several `instruments`, or `open: true`
     for a feature with no instrument; `xfail: reason`
     marks a known gap); not_features (must be absent); max_features.
     Bars and pages match exactly.
     """
     problems: list[str] = []
-    have = {e.instrument for e in report.instrumentation}
+    have = {e.instrument: e.chairs for e in report.instrumentation}
     for item in facts.get("instruments", []):
         fact = item if isinstance(item, dict) else {"name": item}
-        missing = f"instrument {fact['name']!r} missing" if fact["name"] not in have else None
+        missing = None
+        if fact["name"] not in have:
+            missing = f"instrument {fact['name']!r} missing"
+        elif "chairs" in fact and have[fact["name"]] != fact["chairs"]:
+            missing = f"instrument {fact['name']!r} has chairs {have[fact['name']]}, expected {fact['chairs']}"
         problems += _with_xfail(fact, missing)
     for want in facts.get("features", []):
         problems += _with_xfail(want, _feature_problem(report, want))
@@ -216,6 +220,13 @@ def test_expected_to_fail_applies_to_instruments_and_absent_features(solos_repor
     assert check_facts(solos_report, {"instruments": [{"name": "Tuba", "xfail": "not found yet"}]}) == []
     gone = {"not_features": [{"instrument": "Alto Sax", "page": 1, "xfail": "false positive"}]}
     assert check_facts(solos_report, gone) == []
+
+
+def test_instrument_chairs_match_exactly(solos_report):
+    chairs = next(e.chairs for e in solos_report.instrumentation if e.instrument == "Alto Sax")
+    assert check_facts(solos_report, {"instruments": [{"name": "Alto Sax", "chairs": chairs}]}) == []
+    wrong = {"instruments": [{"name": "Alto Sax", "chairs": [*chairs, 9]}]}
+    assert "chairs" in check_facts(solos_report, wrong)[0]
 
 
 def test_expected_facts_file_loads_and_each_entry_is_well_formed():
