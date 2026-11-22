@@ -6,6 +6,9 @@
 # name appears alone in instruction text ("piccolo trpt"). Any instrument is a
 # doubling after "to" ("to Flute").
 #
+# `review` flags an instrument the score cannot pin down; the report warns
+# with that text.
+#
 # `shared_aliases` lists the aliases that name one staff shared by several
 # chairs ("Gtrs."). A feature on such a staff has an ambiguous chair.
 instruments:
@@ -67,7 +70,14 @@ instruments:
     shared_aliases: [guitars, gtrs]  # one staff for every chair of the instrument
   - name: Bass
     family: Rhythm
-    aliases: [bass, double bass, acoustic bass, upright bass, bs, db]
+    aliases: [bass, double bass, acoustic bass, upright bass, a b, bs, db]
+  - name: Cello-Bass
+    family: Strings
+    review: one staff for Cello and Double Bass; the score cannot say which instrument plays it
+    aliases: [cello-bass, cello bass]
+  - name: Vibraphone
+    family: Rhythm
+    aliases: [vibraphone, vibes, vib]
   - name: Electric Bass
     family: Rhythm
     aliases: [electric bass, bass guitar, e bass, e b, eb]
