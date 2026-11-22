@@ -38,6 +38,7 @@ BAR_EVIDENCE: dict[BarKind, float] = {
     "ocr": BAR_GUESSED,  # barlines cannot be counted on a scan
     "missing": 0.0,
 }
+INSTRUMENT_ABSENT = 0.1  # named in the text but not in the instrumentation: a possible feature
 VOICE_NAMED = 0.3  # a vocal lead whose text names the voice ("Female Lead")
 VOICE_FROM_STAFF = 0.15  # a bare "solo" above a Voice Lead F/M staff
 
@@ -47,7 +48,8 @@ def _named_instrument(
 ) -> tuple[str, bool, int | None] | None:
     """(instrument, inferred, chair) named by the words just before the solo
     wording; the chair is the number after the instrument, when there is one.
-    A named instrument the report's instrumentation lacks is dropped with a note."""
+    A named instrument the report's instrumentation lacks is returned only
+    when no present one is named (see `_absent_instrument`), with a note."""
     vocal = _VOCAL_TIED.search(prefix)
     if vocal:
         return "Vocal", not re.search(r"vocals?|vox", vocal.group(0), re.I), None
@@ -67,6 +69,18 @@ def _named_instrument(
             if check.hit.name in roster:
                 return check.hit.name, False, chair
             notes.append(check.problem)
+    return None
+
+
+def _absent_instrument(prefix: str) -> str | None:
+    """The instrument the text names that the instrumentation lacks, by the
+    roster-free resolve; the staff label is never used."""
+    words = re.findall(r"[A-Za-z][A-Za-z.]*", _TEXT_CHAIR.sub("", prefix))
+    for n in (2, 1):
+        if len(words) >= n:
+            hit = resolve(" ".join(words[-n:]))
+            if hit and not hit.also:
+                return hit.name
     return None
 
 
@@ -194,10 +208,19 @@ def _candidate(
         evidence += INSTRUMENT_INFERRED
         reasons.append("instrument inferred from 'male'/'female' without a vocal word")
     elif notes:
-        # The text names an instrument the score lacks: the staff it sits above
-        # is not the soloist's (copies are printed above every staff).
-        reasons.append("named instrument is not in the instrumentation; instrument unknown")
+        # The text names an instrument the score lacks (its part is a separate
+        # file): keep it as a possible feature. The staff it sits above is not
+        # the soloist's (copies are printed above every staff).
+        instrument = _absent_instrument(prefix)
         staff_label = ""
+        if instrument:
+            evidence += INSTRUMENT_ABSENT
+            reasons.append(
+                f"possible feature: {instrument} named in text is not in this score's "
+                "instrumentation (a separate part?)"
+            )
+        else:
+            reasons.append("named instrument is not in the instrumentation; instrument unknown")
     elif staff.voice:
         reasons.append(f"staff '{staff.label}' is a voice staff, not an instrument")
     else:
@@ -477,7 +500,7 @@ def find_features(
 ) -> tuple[list[Feature], list[str]]:
     """(features, warnings). Instruments come only from the score's
     instrumentation (`roster`: first system, variants, recurring instruments);
-    anything else is dropped with a warning."""
+    a solo's own text may also name a missing instrument (a possible feature)."""
     headers = running_headers(pages)
     systems = [s for page in pages for s in find_systems(page, headers)]
     drop_out_of_sequence(systems)

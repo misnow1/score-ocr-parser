@@ -89,7 +89,7 @@ scores:
     # One feature: a violin solo in bars 56-64 (bar 48 starts an 8-measure rest, not the solo).
     max_features: 1
     features:
-      - {instrument: Violin, page: 5, bar: 56, xfail: "reported at bar 48 with no instrument: Violin is not in the first-system instrumentation, so the name is dropped (to become a possible feature)"}
+      - {instrument: Violin, page: 5, bar: 56, xfail: "the violin is now reported on p5 as a possible feature, but at bar 48: barlines cannot be counted there (bar kind nearest), so the nearest printed number is the bar that starts the 8-measure rest; order and section are right"}
 
   "I HEARD THE BELLS ON CHRISTMAS DAY- SCORE.":
     # Seven features: six vocal cues over the SATB staves (a choir label stays out of the
@@ -106,7 +106,7 @@ scores:
       - {instrument: Vocal, kind: vocal, page: 12, xfail: "reported as an instrument-less solo above the SATB staff"}
       # The p13 marking is on the TB line of the SATB staves, not the piano.
       - {instrument: Vocal, kind: vocal, page: 13, xfail: "reported as a Piano solo"}
-      - {instrument: Clarinet, page: 16, xfail: "reported with no instrument: no Clarinet staff in the first-system instrumentation"}
+      - {instrument: Clarinet, page: 16}
     not_features:
       - {instrument: Piano, page: 13, xfail: "the p13 marking is a vocal (TB) solo, reported as Piano"}
 
@@ -135,7 +135,7 @@ scores:
       - Piano
       - Bass
       - Drums
-      - {name: Vibraphone, xfail: "VIBES has no alias in the table"}
+      - Vibraphone
     # No solo or feature markings in this score.
     max_features: 0
 

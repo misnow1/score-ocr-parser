@@ -19,7 +19,8 @@
 - **Barline**: a vertical rule drawn through a system's staves, read from the PDF's vector drawings (text-layer pages only). Rules within 4 pt (double and final barlines) are one.
 - **Row of bars**: one run of bars across the page. Stacks of one system share a row when barlines run unbroken between them; a row without a printed number continues from the row before.
 - **Rehearsal mark**: a single capital letter or a section word ("VERSE") above a system. A feature reports the latest mark at or before it on the same page; a mark never carries onto another page.
-- **Instrumentation**: the instruments on the first system (full names), with chairs and doublings. Features may only name instruments in it.
+- **Instrumentation**: the instruments on the first system (full names), with chairs and doublings. A feature takes its instrument from the staff only when it is in it.
+- **Possible feature**: a solo whose own text names an instrument the instrumentation lacks (its part is a separate file, e.g. "violin solo"). Kept with the instrument, lower confidence, a reason saying it is not in this score, and a flow TODO. A staff label is never guessed this way.
 - **Recurring instrument**: an instrument the first system lacks that labels two or more later systems. It joins the instrumentation; a one-off later label for a missing instrument still warns.
 - **Combined label**: one staff label naming several instruments ("Trb. 3, Tba."). Each part is resolved and cross-checked on its own; a solo marked above such a staff is not assigned to any one part.
 - **Instrument variant**: a canonical name that counts as the same instrument as another for the later-system cross-check (Bass and Electric Bass). One rule, `present_as`, data in `instrument_variants.yaml`.
