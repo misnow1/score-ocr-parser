@@ -50,10 +50,10 @@ scores:
       - {instrument: Guitar, page: 24, bar: 143, xfail: "not found"}
       - {instrument: Guitar, page: 26, bar: 151}
       - {instrument: Guitar, page: 28, bar: 164}
-      - {instrument: Guitar, chair: 1, page: 23, bar: 135, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 2, page: 24, bar: 143, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 1, page: 26, bar: 151, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 2, page: 28, bar: 164, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 1, page: 23, bar: 135}
+      - {instrument: Guitar, chair: 2, page: 24, bar: 143}
+      - {instrument: Guitar, chair: 1, page: 26, bar: 151}
+      - {instrument: Guitar, chair: 2, page: 28, bar: 164}
     not_features:
       - {instrument: Baritone Sax, page: 5, xfail: "false positive today"}
       - {instrument: Trombone, page: 13, xfail: "false positive today"}
@@ -78,4 +78,4 @@ scores:
     max_features: 1
     features:
       - {instrument: Guitar, page: 16, bar: 62}
-      - {instrument: Guitar, chair: 1, page: 16, bar: 62, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 1, page: 16, bar: 62}

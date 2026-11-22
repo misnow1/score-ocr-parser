@@ -20,10 +20,16 @@ def _step(f: Feature) -> FlowStep:
         where.append(f"bar {f.bar}")
     if f.rehearsal_mark:
         where.append(f"rehearsal {f.rehearsal_mark}")
+    if f.chair:
+        where.append(f"chair {f.chair}")
+    elif f.chair_ambiguous:
+        where.append("chair ambiguous (shared staff)")
     note = f"{', '.join(where)}; confidence {f.confidence:g}"
     todo = None
     if f.confidence < LOW_CONFIDENCE or f.instrument is None:
         todo = f"low confidence ({f.confidence:g}): " + "; ".join(f.reasons)
+    elif f.chair_ambiguous:
+        todo = "chair ambiguous: " + "; ".join(f.reasons)
     return FlowStep(section, (f.instrument or "unknown").lower(), note, todo)
 
 

@@ -7,10 +7,10 @@ the next systems and pages), `build_feature` turns each group into one Feature.
 
 import re
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from .layout import is_chord_symbol, running_headers
-from .instruments import Roster, resolve_against_first_system
+from .instruments import Roster, resolve, resolve_against_first_system
 from .models import Feature, FeatureKind, Location, Page
 from .measures import current_mark
 from .systems import Phrase, System, find_systems
@@ -18,6 +18,7 @@ from .systems import Phrase, System, find_systems
 _KEYWORD = re.compile(r"\b(solos?|feature)\b", re.I)
 _REPEAT = re.compile(r"^\s*\d+\s*x\s*[-–:]?\s*", re.I)
 _VAMP_FOR = re.compile(r"^\s*vamp\s+for\s+", re.I)
+_TEXT_CHAIR = re.compile(r"\s(\d)\s*$")  # "GUITAR 1 " before the solo wording
 # The vocal word must sit directly before the solo wording ("male vocal solo").
 _VOCAL_TIED = re.compile(r"\b(?:(male|female)(?:\s+(?:vocals?|vox))?|vocals?|vox)\s*$", re.I)
 
@@ -31,12 +32,17 @@ BAR_GUESSED = 0.05  # text sits left of every bar number
 
 def _named_instrument(
     prefix: str, roster: Roster, notes: list[str]
-) -> tuple[str, bool] | None:
-    """(instrument, inferred) named by the words just before the solo wording.
+) -> tuple[str, bool, int | None] | None:
+    """(instrument, inferred, chair) named by the words just before the solo
+    wording; the chair is the number after the instrument, when there is one.
     A named instrument the report's instrumentation lacks is dropped with a note."""
     vocal = _VOCAL_TIED.search(prefix)
     if vocal:
-        return "Vocal", not re.search(r"vocals?|vox", vocal.group(0), re.I)
+        return "Vocal", not re.search(r"vocals?|vox", vocal.group(0), re.I), None
+    chair_match = _TEXT_CHAIR.search(prefix)
+    chair = int(chair_match.group(1)) if chair_match else None
+    if chair_match:
+        prefix = prefix[: chair_match.start()]
     words = re.findall(r"[A-Za-z][A-Za-z.]*", prefix)
     for n in (2, 1):
         if len(words) < n:
@@ -47,7 +53,7 @@ def _named_instrument(
             if check.hit is None:
                 continue
             if check.hit.name in roster:
-                return check.hit.name, False
+                return check.hit.name, False, chair
             notes.append(check.problem)
     return None
 
@@ -76,6 +82,14 @@ class MergeKey:
     instrument: str | None
     text: str  # empty when the instrument is named
     staff: str  # empty when the instrument is named
+    chair: int | None = None  # a chair named in the text; chairs are separate features
+
+
+# Where a chair came from, strongest first: the marking text ("GUITAR 1 SOLO"),
+# an unnumbered "GUITAR SOLO" printed above that instrument's own numbered
+# staff, or the staff of a bare "SOLO".
+ChairFrom = Literal["text", "own staff", "staff"]
+_CHAIR_RANK: dict[ChairFrom, int] = {"text": 3, "own staff": 2, "staff": 1}
 
 
 @dataclass
@@ -94,12 +108,18 @@ class Candidate:
     bar_certain: bool
     mark: str | None
     staff: str  # the staff below the text; empty when the text names an absent instrument
+    chair: int | None = None
+    chair_from: "ChairFrom | None" = None
+    chair_ambiguous: bool = False  # the staff is shared by several chairs
 
     @property
     def key(self) -> MergeKey:
         """Copies of one solo share it."""
         if self.instrument:
-            return MergeKey(self.kind, self.instrument, "", "")
+            return MergeKey(
+                self.kind, self.instrument, "", "",
+                self.chair if self.chair_from == "text" else None,
+            )
         return MergeKey(self.kind, None, self.text.lower(), self.staff)
 
     @property
@@ -135,12 +155,23 @@ def _candidate(
     reasons = [f"matched {kind} wording"]
     evidence = BASE
     instrument = None
+    chair = None
+    chair_from: ChairFrom | None = None
+    ambiguous = False
     staff_label = staff.label
     named = _named_instrument(prefix, roster, notes)
     if named and not named[1]:
-        instrument = named[0]
+        instrument, chair = named[0], named[2]
         evidence += INSTRUMENT_NAMED
         reasons.append("instrument named in text")
+        if chair:
+            chair_from = "text"
+            reasons.append(f"chair {chair} named in text")
+        else:
+            own = resolve(staff.label)
+            if own and own.name == instrument and not own.also and own.single_chair:
+                chair, chair_from = own.single_chair, "own staff"
+                reasons.append(f"chair {chair} taken from the {instrument} staff '{staff.label}' below")
     elif named:
         instrument = named[0]
         evidence += INSTRUMENT_INFERRED
@@ -158,6 +189,13 @@ def _candidate(
             instrument = check.hit.name
             evidence += INSTRUMENT_INFERRED
             reasons.append(f"instrument taken from staff '{staff.label}'")
+            chair = check.hit.single_chair
+            chair_from = "staff" if chair else None
+            ambiguous = check.hit.shared
+            if chair:
+                reasons.append(f"chair {chair} taken from staff '{staff.label}'")
+            elif ambiguous:
+                reasons.append(f"staff '{staff.label}' is shared by several chairs; chair ambiguous")
         else:
             reasons.append(f"staff '{staff.label}' not usable; instrument unknown")
             if check.problem:
@@ -182,6 +220,9 @@ def _candidate(
         bar_certain=certain,
         mark=current_mark(context.systems, system, phrase.x0),
         staff=staff_label,
+        chair=chair,
+        chair_from=chair_from,
+        chair_ambiguous=ambiguous,
     )
 
 
@@ -236,15 +277,31 @@ def _locations(group: list[Candidate]) -> list[Location]:
     return [Location(page, bar) for page, bar in seen]
 
 
+def _group_chair(group: list[Candidate]) -> tuple[int | None, bool]:
+    """(chair, ambiguous) for merged copies: the strongest source wins; copies
+    of one source that name different chairs, or only shared staves, are ambiguous."""
+    named = [c for c in group if c.chair is not None and c.chair_from]
+    if named:
+        best = max(_CHAIR_RANK[c.chair_from] for c in named if c.chair_from)
+        chairs = {c.chair for c in named if c.chair_from and _CHAIR_RANK[c.chair_from] == best}
+        if len(chairs) == 1:
+            return chairs.pop(), False
+        return None, True
+    return None, any(c.chair_ambiguous for c in group)
+
+
 def build_feature(group: list[Candidate]) -> Feature:
     """One Feature from a group of copies; the best-evidenced copy leads."""
     lead = max(group, key=lambda c: c.confidence)
     reasons = list(lead.reasons)
+    chair, ambiguous = _group_chair(group)
     if len(group) > 1:
         reasons.append(f"merged {len(group)} copies of the same marking")
     return Feature(
         kind=lead.kind,
         instrument=lead.instrument,
+        chair=chair,
+        chair_ambiguous=ambiguous,
         page=lead.page,
         bar=lead.bar,
         rehearsal_mark=lead.mark,

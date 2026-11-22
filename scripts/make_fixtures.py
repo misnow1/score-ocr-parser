@@ -229,6 +229,39 @@ def repeated_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+CHAIR_FULL = ["Alto Saxophone", "Trumpet in Bb 3", "Guitar 1", "Guitar 2"]
+CHAIR_ABBR = ["A. Sx.", "B Tpt. 3", "Gtrs."]
+
+
+def chair_solos(music_font: Path, out: Path) -> None:
+    """Chairs on features: named in the text (Guitar 1 and Guitar 2 side by side),
+    taken from a numbered staff (Trumpet 3), and a shared "Gtrs." staff."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Chair Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, CHAIR_FULL, music_font, [
+        (150, 120, "1", 7), (400, 120, "9", 7),
+        (200, ys_at(150, 2) - 12, "GUITAR 1 SOLO", 9),
+        (300, ys_at(150, 3) - 12, "GUITAR 2 SOLO", 9),
+        (250, ys_at(150, 1) - 12, "SOLO", 9),
+    ])
+    _system(p1, 400, CHAIR_ABBR, music_font, [
+        (150, 370, "17", 7),
+        (250, ys_at(400, 2) - 12, "SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, ["A. Sx.", "B Tpt. 3"], music_font, [(150, 120, "25", 7)])
+    p3 = doc.new_page(width=612, height=792)
+    _system(p3, 150, ["A. Sx.", "Gtr. 1", "Gtr. 2"], music_font, [
+        (150, 120, "33", 7),
+        # "GUITAR SOLO" above every staff but Gtr. 2's, which carries a bare "SOLO"
+        (300, ys_at(150, 0) - 12, "GUITAR SOLO", 9),
+        (300, ys_at(150, 1) - 12, "GUITAR SOLO", 9),
+        (299, ys_at(150, 2) - 12, "SOLO", 9),
+    ])
+    doc.save(out)
+
+
 RA_CUE = ["Piano", "Bass", "Drum Set"]
 RA_FULL = [
     "Piccolo",
@@ -386,6 +419,7 @@ def main() -> None:
         finale_solos(font, OUT / "finale_solos.pdf")
         right_aligned(font, OUT / "finale_right_aligned.pdf")
         repeated_solos(font, OUT / "finale_repeated_solos.pdf")
+        chair_solos(font, OUT / "finale_chair_solos.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")
