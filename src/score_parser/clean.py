@@ -57,11 +57,12 @@ def is_music(tok: Token) -> bool:
 
 
 def clean(page: Page) -> Page:
-    kept = []
+    kept, glyphs = [], []
     for tok in page.tokens:
         if is_music(tok):
+            glyphs.append(tok)
             continue
         text = "".join(c for c in tok.text if not _is_private_use(c)).strip()
         if text:
             kept.extend(_split_glued(replace(tok, text=text)))
-    return replace(page, tokens=kept)
+    return replace(page, tokens=kept, glyphs=glyphs)

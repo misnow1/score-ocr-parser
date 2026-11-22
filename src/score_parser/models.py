@@ -45,6 +45,8 @@ class Page:
     # Degrees clockwise the scanned content is printed rotated (0, 90 or 270).
     # Tokens and width/height are already in the upright frame.
     rotation: int = 0
+    # Music-font glyphs the clean stage took out of `tokens` (clefs, notes).
+    glyphs: list[Token] = field(default_factory=list)
 
 
 @dataclass

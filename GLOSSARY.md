@@ -7,9 +7,11 @@
 - **Music-font glyph**: a clef, note, rest or accidental drawn from a notation font (private-use characters, or ordinary characters set in a notation font such as Opus, Maestro or Finale Jazz; a word with an empty font name made only of glyph characters counts too). Tested in one place, `is_music`, and removed in the clean stage.
 - **Staff label**: the instrument name at the left of a staff. Full names appear on the first system, abbreviations on later ones.
 - **Label column**: the staff labels at the left of the staves. Found from a shared right edge (labels are usually right-aligned) or left edge, then each line is cut to its label at the first big gap, glyph residue, chord symbol or time signature. A trailing time signature ("44") is never a chair.
+- **Overprinted label**: two labels printed over each other on one line. Read as two lines, upper first.
+- **Unlabeled staff**: a staff (a clef at the staff-start column) with no label near it. Reported once per score as a warning.
 - **Label stack**: the staff labels of the label column for one system, top to bottom. A large vertical gap starts a new stack.
 - **Running header**: a long line repeating on several pages (the title with a page number). Not a staff label.
-- **Group label**: a section or score tag in the label column ("Score 5", "Trumpets"). Not a staff label.
+- **Group label**: a section or score tag in the label column ("Score 5", "Trumpets", "TBNS"). Not a staff label. Nor are cue notes in the column ("(Memory out front)", "Drums only......", "Swing Feel in 8ths").
 - **First system**: the label stack on the first page that has any resolving label, with the most labels that resolve.
 - **System**: one row of staves across the page.
 - **Staff band**: the vertical position of one staff in a system, taken from its label.
