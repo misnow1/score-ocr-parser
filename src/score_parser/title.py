@@ -12,9 +12,20 @@ _DATE = re.compile(
 )
 _YEAR = re.compile(r"\b(19|20)\d{2}\b")
 _PARENS_COPY = re.compile(r"[(\[]\s*(copy|\d+)(\s+\d+)?\s*[)\]]", re.I)
-_NOISE_WORDS = re.compile(
-    r"\b(scores?|copy|copies|ajc|full|conductor|final|draft)\b", re.I
+# Always noise: "score", "AJC". Words that can also be part of a title ("Final
+# Countdown", "Full Moon", "Copy Cat") go only when set off by a dash or
+# brackets, at the end of the name, or next to a sure noise word or a date.
+_SURE_NOISE = re.compile(r"\b(scores?|ajc)\b", re.I)
+_MAYBE = r"(?:copy|copies|full|conductor|final|draft)"
+_MAYBE_SET_OFF = re.compile(
+    rf"[(\[]\s*{_MAYBE}\s*[)\]]"
+    rf"|(?<=[-–])\s*\b{_MAYBE}\b(?=\s*(?:[-–]|$))"
+    rf"|(?:(?<=\s)|^)\b{_MAYBE}\b(?=\s*[-–])"
+    rf"|\s\b{_MAYBE}\s*$",
+    re.I,
 )
+_MARK = "\0"
+_MAYBE_BESIDE_MARK = re.compile(rf"{_MARK}\s*\b{_MAYBE}\b|\b{_MAYBE}\b\s*{_MARK}", re.I)
 _LARGE = 0.85  # a token this fraction of the tallest counts as "large text"
 
 
@@ -31,8 +42,12 @@ def _drop_part_word(text: str) -> str:
 
 def clean_filename(stem: str) -> str:
     text = _drop_part_word(stem.replace("_", " "))
-    for pattern in (_PARENS_COPY, _DATE, _YEAR, _NOISE_WORDS):
-        text = pattern.sub(" ", text)
+    text = _MAYBE_SET_OFF.sub(" ", _PARENS_COPY.sub(" ", text))
+    for pattern in (_DATE, _YEAR, _SURE_NOISE):
+        text = pattern.sub(_MARK, text)
+    while (stripped := _MAYBE_BESIDE_MARK.sub(_MARK, text)) != text:
+        text = stripped
+    text = text.replace(_MARK, " ")
     text = re.sub(r"[\s\-–,]+", " ", text).strip(" -–.")
     return text
 

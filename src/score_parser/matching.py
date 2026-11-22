@@ -9,6 +9,15 @@ from rapidfuzz import fuzz, process
 from .data import load
 
 MIN_SCORE = 85
+# A title much shorter than a candidate is not a match however well it sits
+# inside it ("Sing" in "Sing Sing Sing"): the lengths must be this close.
+MIN_LENGTH_RATIO = 0.6
+
+
+def _similarity(a: str, b: str, **_) -> float:
+    if min(len(a), len(b)) < MIN_LENGTH_RATIO * max(len(a), len(b)):
+        return 0.0
+    return fuzz.WRatio(a, b)
 
 
 def slugify(title: str) -> str:
@@ -56,5 +65,5 @@ def match_slug(title: str, numbers_dir: Path) -> str | None:
     wanted = _normalise(title)
     if wanted in candidates:
         return candidates[wanted]
-    hit = process.extractOne(wanted, list(candidates), scorer=fuzz.WRatio, score_cutoff=MIN_SCORE)
+    hit = process.extractOne(wanted, list(candidates), scorer=_similarity, score_cutoff=MIN_SCORE)
     return candidates[hit[0]] if hit else None

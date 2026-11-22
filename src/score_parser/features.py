@@ -347,6 +347,9 @@ def _is_reminder_of(c: Candidate, group: list[Candidate]) -> bool:
     chairs = {g.chair for g in group if g.chair is not None}
     if c.system_index != last.system_index and c.chair is not None and chairs and c.chair not in chairs:
         return False
+    sections = {g.section for g in group if g.section}
+    if c.section and sections and c.section not in sections:  # "Verse 1" then "Verse 2"
+        return False
     return c.bar is None or last.bar is None or abs(c.bar - last.bar) <= MAX_REMINDER_GAP
 
 
@@ -432,12 +435,17 @@ def _participant(group: list[Candidate]) -> Participant:
 
 
 def build_feature(group: list[Candidate], others: list[list[Candidate]] | None = None) -> Feature:
-    """One Feature from a group of copies; the best-evidenced copy leads. `others`
+    """One Feature from a group of copies; the best-evidenced copy leads the
+    score, reasons and text, while page, bar and mark are those of the first
+    appearance (a later reminder never relocates the feature). `others`
     are the groups of the other instruments the same marking is printed over."""
     others = others or []
     everything = group + [c for g in others for c in g]
     lead = max(group, key=lambda c: c.confidence)
     reasons = list(lead.reasons)
+    locations = _locations(everything)
+    first_page, first_bar = locations[0].page, locations[0].bar
+    first = next(c for c in group if (c.page, c.bar) == (first_page, first_bar))
     chair, ambiguous = _group_chair(group)
     if len(group) > 1:
         reasons.append(f"merged {len(group)} copies of the same marking")
@@ -449,13 +457,13 @@ def build_feature(group: list[Candidate], others: list[list[Candidate]] | None =
         instrument=lead.instrument,
         chair=chair,
         chair_ambiguous=ambiguous,
-        page=lead.page,
-        bar=lead.bar,
-        rehearsal_mark=lead.mark,
+        page=first_page,
+        bar=first_bar,
+        rehearsal_mark=first.mark,
         raw_text=lead.text,
         confidence=round(lead.confidence, 2),
         reasons=reasons,
-        locations=_locations(everything),
+        locations=locations,
         voice=lead.voice,
         section=next((c.section for c in group if c.section), None),
         shared_with=[_participant(g) for g in others],
