@@ -28,6 +28,10 @@ class Resolved:
     doublings: list[str]
     also: list["Resolved"] = field(default_factory=list)  # further parts of a combined label
 
+    def parts(self) -> list["Resolved"]:
+        """This instrument and the further parts of a combined label."""
+        return [self, *self.also]
+
 
 @cache
 def _data() -> list[dict]:
@@ -139,39 +143,53 @@ class LabelCheck:
         return self.hit is not None and self.problem is None
 
 
-def resolve_against_first_system(
-    label: str, first_chairs: dict[str, set[int]], recurring: Iterable[str] = ()
-) -> LabelCheck:
+@dataclass(frozen=True)
+class Roster:
+    """What a later-system label is checked against: the first system's chairs
+    per instrument, and the instruments the first system lacks that recur
+    across later systems (accepted without a warning)."""
+
+    first_chairs: dict[str, set[int]]
+    recurring: tuple[str, ...] = ()
+
+    def __contains__(self, name: str) -> bool:
+        return name in self.first_chairs or name in self.recurring
+
+
+def _check_part(part: Resolved, label: str, roster: Roster) -> tuple[Resolved, str | None]:
+    """(part under the roster's name for it, the problem or None)."""
+    same = present_as(part.name, roster.first_chairs)
+    if same is None and (rec := present_as(part.name, roster.recurring)):
+        return replace(part, name=rec), None  # recurring: a normal instrument of the score
+    if same is not None:
+        part = replace(part, name=same)
+    if part.name not in roster.first_chairs:
+        return part, f"label '{label}' ({part.name}) is not in the first-system instrumentation"
+    if not set(part.chairs) <= roster.first_chairs[part.name]:
+        return part, (
+            f"label '{label}' has chairs {part.chairs} outside "
+            f"the first system's {sorted(roster.first_chairs[part.name])} for {part.name}"
+        )
+    return part, None
+
+
+def resolve_against_first_system(label: str, roster: Roster) -> LabelCheck:
     """Resolve a staff label and cross-check it against the first system.
 
-    `first_chairs` maps each first-system instrument to its chairs. The one rule
-    for later-system labels and for labels that features take instruments from.
-    `recurring` names instruments the first system lacks that recur across later
-    systems; they are accepted without a warning."""
+    The one rule for later-system labels and for labels that features take
+    instruments from. Every part of a combined label is checked; the returned
+    hit carries the roster's names (variants, recurring instruments)."""
     hit = resolve(label)
     if hit is None:
         return LabelCheck(None, f"label '{label}' is not recognised")
-    parts = []
-    for part in [hit, *hit.also]:
-        same = present_as(part.name, first_chairs)
-        if same is None and (rec := present_as(part.name, recurring)):
-            parts.append(replace(part, name=rec))  # recurring: a normal instrument of the score
-            continue
-        if same is not None:
-            part = replace(part, name=same)
-        parts.append(part)
-        if part.name not in first_chairs:
-            return LabelCheck(
-                hit, f"label '{label}' ({part.name}) is not in the first-system instrumentation"
-            )
-        if not set(part.chairs) <= first_chairs[part.name]:
-            return LabelCheck(
-                hit,
-                f"label '{label}' has chairs {part.chairs} outside "
-                f"the first system's {sorted(first_chairs[part.name])} for {part.name}",
-            )
-    hit = replace(parts[0], also=parts[1:])
-    return LabelCheck(hit, None)
+    parts: list[Resolved] = []
+    problem = None
+    for part in hit.parts():
+        checked, found = _check_part(part, label, roster)
+        parts.append(checked)
+        if found and problem is None:
+            problem = found
+    return LabelCheck(replace(parts[0], also=parts[1:]), problem)
 
 
 @dataclass
@@ -180,9 +198,7 @@ class Instrumentation:
     unknown_labels: list[str]
     warnings: list[str]
 
-    @property
-    def first_chairs(self) -> dict[str, set[int]]:
-        return {e.instrument: set(e.chairs) for e in self.entries}
+    roster: Roster = field(default_factory=lambda: Roster({}))
 
 
 def _first_system(stacks: list[tuple[int, list[TextLine]]]) -> int:
@@ -211,7 +227,7 @@ def _recurring_names(
         seen: set[str] = set()
         for line in stack:
             hit = resolve(line.text)
-            for part in [hit, *hit.also] if hit else []:
+            for part in hit.parts() if hit else []:
                 if present_as(part.name, first_chairs):
                     continue
                 name = present_as(part.name, names)
@@ -249,21 +265,21 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
         if hit is None:
             unknown.append(line.text)
         else:
-            for part in [hit, *hit.also]:
+            for part in hit.parts():
                 add(line.text, part)
 
     first_chairs = {name: set(e.chairs) for name, e in entries.items()}
     later = [st for i, st in enumerate(stacks) if i != first]
-    recurring = _recurring_names(first_chairs, later)
+    roster = Roster(first_chairs, tuple(_recurring_names(first_chairs, later)))
     for number, stack in later:
         for line in stack:
-            check = resolve_against_first_system(line.text, first_chairs, recurring)
+            check = resolve_against_first_system(line.text, roster)
             if check.hit is None and line.text not in unknown:
                 unknown.append(line.text)
             if check.problem:
                 warnings[f"Page {number}: {check.problem}"] = None
             else:
-                for part in [check.hit, *check.hit.also]:
+                for part in check.hit.parts():
                     add(line.text, part)
 
     for page in pages:
@@ -273,12 +289,15 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
         for ins in instruction_lines(page, headers):
             doubled = instruction_doublings(ins.text)
             owner = resolve(_nearest(page_labels, ins.yc).text) if doubled else None
-            entry = entries.get(owner.name) if owner else None
-            if entry:
+            for part in owner.parts() if owner else []:
+                name = present_as(part.name, entries)
+                if name is None:
+                    continue
+                entry = entries[name]
                 entry.doublings += [
                     d for d in doubled if d != entry.instrument and d not in entry.doublings
                 ]
-    return Instrumentation(list(entries.values()), unknown, list(warnings))
+    return Instrumentation(list(entries.values()), unknown, list(warnings), roster)
 
 
 def vocabulary() -> list[str]:

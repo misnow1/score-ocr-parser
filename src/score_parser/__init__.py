@@ -24,7 +24,7 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
     if not instrumentation.entries:
         warnings.append("no instrumentation found: the first system's labels could not be read")
     title, title_source = score_title(path, pages)
-    features, feature_warnings = find_features(pages, instrumentation.first_chairs)
+    features, feature_warnings = find_features(pages, instrumentation.roster)
     warnings += feature_warnings
     slug = match_slug(title, Path(options.numbers_dir)) if options.numbers_dir else None
     name, unmatched = draft_name(title, slug, options.numbers_dir)

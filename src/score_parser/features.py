@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import NamedTuple
 
 from .layout import is_chord_symbol, running_headers
-from .instruments import resolve_against_first_system
+from .instruments import Roster, resolve_against_first_system
 from .models import Feature, FeatureKind, Location, Page
 from .systems import X_SLACK, Phrase, System, find_systems
 
@@ -29,7 +29,7 @@ BAR_GUESSED = 0.05  # text sits left of every bar number
 
 
 def _named_instrument(
-    prefix: str, first_chairs: dict[str, set[int]], notes: list[str]
+    prefix: str, roster: Roster, notes: list[str]
 ) -> tuple[str, bool] | None:
     """(instrument, inferred) named by the words just before the solo wording.
     A named instrument the report's instrumentation lacks is dropped with a note."""
@@ -42,10 +42,10 @@ def _named_instrument(
             continue
         candidate = " ".join(words[-n:])
         for form in (candidate, candidate + "s"):
-            check = resolve_against_first_system(form, first_chairs)
+            check = resolve_against_first_system(form, roster)
             if check.hit is None:
                 continue
-            if check.hit.name in first_chairs:
+            if check.hit.name in roster:
                 return check.hit.name, False
             notes.append(check.problem)
     return None
@@ -122,11 +122,11 @@ class Candidate:
 
 class SystemContext(NamedTuple):
     """Where a wording was found: the document's systems, which of them, and
-    the first system's chairs that instruments are checked against."""
+    the roster that instruments are checked against."""
 
     systems: list[System]
     index: int
-    first_chairs: dict[str, set[int]]
+    roster: Roster
 
     @property
     def system(self) -> System:
@@ -141,13 +141,13 @@ def _candidate(
     phrase: Phrase,
     notes: list[str],
 ) -> Candidate:
-    system, first_chairs = context.system, context.first_chairs
+    system, roster = context.system, context.roster
     staff = system.staff_for(phrase.yc)
     reasons = [f"matched {kind} wording"]
     evidence = BASE
     instrument = None
     staff_label = staff.label
-    named = _named_instrument(prefix, first_chairs, notes)
+    named = _named_instrument(prefix, roster, notes)
     if named and not named[1]:
         instrument = named[0]
         evidence += INSTRUMENT_NAMED
@@ -162,8 +162,10 @@ def _candidate(
         reasons.append("named instrument is not in the instrumentation; instrument unknown")
         staff_label = ""
     else:
-        check = resolve_against_first_system(staff.label, first_chairs)
-        if check.hit and check.hit.name in first_chairs:
+        check = resolve_against_first_system(staff.label, roster)
+        if check.hit and check.hit.also:
+            reasons.append(f"staff '{staff.label}' names several instruments; instrument unknown")
+        elif check.hit and check.hit.name in roster:
             instrument = check.hit.name
             evidence += INSTRUMENT_INFERRED
             reasons.append(f"instrument taken from staff '{staff.label}'")
@@ -195,7 +197,7 @@ def _candidate(
 
 
 def collect_candidates(
-    systems: list[System], first_chairs: dict[str, set[int]]
+    systems: list[System], roster: Roster
 ) -> tuple[list[Candidate], list[str]]:
     """(candidates, warnings): every solo wording on every system, in reading order."""
     candidates: list[Candidate] = []
@@ -210,7 +212,7 @@ def collect_candidates(
             kind, prefix = hit
             candidates.append(
                 _candidate(
-                    kind, prefix, text, SystemContext(systems, index, first_chairs), phrase, notes
+                    kind, prefix, text, SystemContext(systems, index, roster), phrase, notes
                 )
             )
             for note in notes:
@@ -265,11 +267,12 @@ def build_feature(group: list[Candidate]) -> Feature:
 
 
 def find_features(
-    pages: list[Page], first_chairs: dict[str, set[int]]
+    pages: list[Page], roster: Roster
 ) -> tuple[list[Feature], list[str]]:
-    """(features, warnings). Instruments come only from the first system's
-    instrumentation (`first_chairs`); anything else is dropped with a warning."""
+    """(features, warnings). Instruments come only from the score's
+    instrumentation (`roster`: first system, variants, recurring instruments);
+    anything else is dropped with a warning."""
     headers = running_headers(pages)
     systems = [s for page in pages for s in find_systems(page, headers)]
-    candidates, warnings = collect_candidates(systems, first_chairs)
+    candidates, warnings = collect_candidates(systems, roster)
     return [build_feature(g) for g in merge_candidates(candidates)], warnings
