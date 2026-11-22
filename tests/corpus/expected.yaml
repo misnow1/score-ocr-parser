@@ -81,3 +81,81 @@ scores:
     features:
       - {instrument: Guitar, page: 16, bar: 62}
       - {instrument: Guitar, chair: 1, page: 16, bar: 62}
+
+  # The file name ends in a space before ".pdf"; the key keeps it.
+  "HOLIDAY IN 11_3_26 - Score ":
+    # The violin is a separate part file, so the score shows only the piano staff.
+    instruments: [Piano]
+    # One feature: a violin solo in bars 56-64 (bar 48 starts an 8-measure rest, not the solo).
+    max_features: 1
+    features:
+      - {instrument: Violin, page: 5, bar: 56, xfail: "reported at bar 48 with no instrument: Violin is not in the first-system instrumentation, so the name is dropped (to become a possible feature)"}
+
+  "I HEARD THE BELLS ON CHRISTMAS DAY- SCORE.":
+    # Seven features: six vocal cues over the SATB staves (a choir label stays out of the
+    # instrument table) and one clarinet solo. Pages only, apart from the first start bar.
+    # Cap is 8 until the p1/p2 vocal solo stops being reported as two features; lower it to 7 then.
+    max_features: 8
+    features:
+      # One vocal solo (first time), all in unison on the repeat; it starts before the repeat and carries to p2.
+      - {instrument: Vocal, kind: vocal, page: 1, bar: 4, xfail: "reported as two instrument-less solos (p1 bar 4, p2 bar 9)"}
+      - {instrument: Vocal, kind: vocal, page: 5, xfail: "reported as an instrument-less solo above the SATB staff (a tenor/bass vocal solo)"}
+      # "Solo or All": left to the conductor or vocalist.
+      - {instrument: Vocal, kind: vocal, page: 6, xfail: "reported as an instrument-less solo above the SATB staff"}
+      - {instrument: Vocal, kind: vocal, page: 10, xfail: "reported as an instrument-less solo above the SATB staff"}
+      - {instrument: Vocal, kind: vocal, page: 12, xfail: "reported as an instrument-less solo above the SATB staff"}
+      # The p13 marking is on the TB line of the SATB staves, not the piano.
+      - {instrument: Vocal, kind: vocal, page: 13, xfail: "reported as a Piano solo"}
+      - {instrument: Clarinet, page: 16, xfail: "reported with no instrument: no Clarinet staff in the first-system instrumentation"}
+    not_features:
+      - {instrument: Piano, page: 13, xfail: "the p13 marking is a vocal (TB) solo, reported as Piano"}
+
+  "I Pray on Christmas extended version nov Score":
+    # Three features: a piano solo vamp, a tuba solo while the bass is tacet, and a tuba solo break.
+    # Cap is 6 until copies of one marking merge into one feature (the tool reports six); lower it to 3 then.
+    max_features: 6
+    features:
+      - {instrument: Piano, page: 1}
+      - {instrument: Tuba, page: 3}
+      - {instrument: Tuba, page: 8, bar: 46, mark: D, xfail: "reported as Alto Sax (plus a copy with no instrument)"}
+    not_features:
+      - {instrument: Alto Sax, page: 8, xfail: "the p8 solo break is a tuba solo; the A. and Bar. lines are vocals"}
+
+  # A scan (OCR). Page-1 staves: Alto Sax 1-2, Tenor Sax 1-2, Baritone Sax, Trumpet 1-4,
+  # Trombone 1-4, Guitar, Piano, Bass, Drums, Vibraphone. Staff names are not abbreviated on later pages.
+  # The checker cannot test chair numbers on instruments; the tool misses Trumpet 1 and 4 and adds a bogus Trombone 29.
+  "SCORE- The Most Wonderful Time of the Year  copy":
+    instruments:
+      - Alto Sax
+      - Tenor Sax
+      - Baritone Sax
+      - Trumpet
+      - Trombone
+      - Guitar
+      - Piano
+      - Bass
+      - Drums
+      - {name: Vibraphone, xfail: "VIBES has no alias in the table"}
+    # No solo or feature markings in this score.
+    max_features: 0
+
+  # Page-1 staves: Vocals (two staves, Alto and Alto: vocal parts, not the sax), Flute, Trumpet in Bb,
+  # Trombone, Guitar, Organ (unlabeled on later pages), Piano, Acoustic Bass ("A.B."), Drum Set.
+  # The tool also reads the vocal "Alto" label as Alto Sax; the checker cannot assert an instrument is absent.
+  "What Child is This 2018 - SCORE":
+    instruments:
+      - Flute
+      - Trumpet
+      - Trombone
+      - Guitar
+      - Organ
+      - Piano
+      - Bass
+      - Drums
+    # One feature: a group of solos over bars 45-77 inside a repeat (slashes on every staff but the organ
+    # and drums; bar 77 is marked "lead only"). Who plays is not clear, so no instrument is asserted
+    # beyond the Guitar, whose part shows it. The tool reports three features (a "(SOLOS)" marking twice
+    # and a guitar solo built from chord text) and no bars; lower the cap to 1 when copies merge.
+    max_features: 3
+    features:
+      - {instrument: Guitar, bar: 45, xfail: "no bar numbers are read on this score; the marking is reported on p2 and p4 with bar None"}
