@@ -264,6 +264,7 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
     entries: dict[str, InstrumentEntry] = {}
     unknown: list[str] = []
     warnings: dict[str, None] = {}
+    unrecognised: dict[str, set[int]] = {}  # label -> pages it appears on
 
     headers = running_headers(pages)
     stacks = [(p.number, st) for p in pages for st in label_stacks(p, headers)]
@@ -293,13 +294,19 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
     for number, stack in later:
         for line in stack:
             check = resolve_against_first_system(line.text, roster)
-            if check.hit is None and line.text not in unknown:
-                unknown.append(line.text)
-            if check.problem:
+            if check.hit is None:
+                if line.text not in unknown:
+                    unknown.append(line.text)
+                unrecognised.setdefault(line.text, set()).add(number)
+            elif check.problem:
                 warnings[f"Page {number}: {check.problem}"] = None
             else:
                 for part in check.hit.parts():
                     add(line.text, part)
+
+    for label, on_pages in unrecognised.items():
+        count = len(on_pages)
+        warnings[f"label '{label}' is not recognised (on {count} page{'s' * (count != 1)})"] = None
 
     for page in pages:
         page_labels = [ln for n, st in stacks if n == page.number for ln in st]
