@@ -138,3 +138,32 @@ def test_wood_block_and_cowbell_resolve(tmp_path, label, instrument):
     report = parse_score(pdf)
     assert instrument in chairs(report)
     assert report.unknown_labels == []
+
+
+@pytest.mark.parametrize("label", ["Vibes", "Vibraphone", "Vib."])
+def test_vibraphone_aliases_resolve(tmp_path, label):
+    pdf = make_score(tmp_path / "s.pdf", [(150, FIRST + [label])])
+    report = parse_score(pdf)
+    assert "Vibraphone" in chairs(report)
+    assert report.unknown_labels == []
+
+
+def test_ab_on_later_system_is_acoustic_bass(tmp_path):
+    first = ["Guitar", "Acoustic Bass", "Drums", "Piano"]
+    pdf = make_score(tmp_path / "s.pdf", [(150, first), (500, ["A.B."])])
+    report = parse_score(pdf)
+    assert report.warnings == []
+    assert report.unknown_labels == []
+    bass = next(e for e in report.instrumentation if e.instrument == "Bass")
+    assert "A.B." in bass.labels
+    assert [e.instrument for e in report.instrumentation].count("Bass") == 1
+
+
+def test_cello_bass_is_a_combined_entry_flagged_for_review(tmp_path):
+    first = ["Guitar", "Cello-Bass", "Drums", "Piano"]
+    report = parse_score(make_score(tmp_path / "s.pdf", [(150, first)]))
+    names = [e.instrument for e in report.instrumentation]
+    assert "Cello-Bass" in names
+    assert "Electric Bass" not in names
+    assert any("Cello-Bass" in w and "review" in w for w in report.warnings)
+    assert report.unknown_labels == []

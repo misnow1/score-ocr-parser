@@ -135,7 +135,7 @@ scores:
       - Piano
       - Bass
       - Drums
-      - {name: Vibraphone, xfail: "VIBES has no alias in the table"}
+      - Vibraphone
     # No solo or feature markings in this score.
     max_features: 0
 
