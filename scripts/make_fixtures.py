@@ -287,6 +287,83 @@ def right_aligned(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def _repair_system(page, music_font, rows, right=130.0) -> None:
+    """Right-aligned label rows (label text or None for a staff without a label,
+    or ("noise", text) for a non-label line that has no staff). Each staff gets a
+    clef glyph at x=140 and a rule."""
+    y = rows[0][0]
+    for top, row in rows:
+        y = top
+        if isinstance(row, tuple):  # text in the label column with no staff beside it
+            _right_label(page, right, y, row[1])
+            continue
+        if row is not None:
+            _right_label(page, right, y, row)
+        page.draw_line((150, y), (580, y))
+        page.insert_text((140, y), MUSIC_GLYPHS, fontfile=str(music_font), fontname="SynMusic", fontsize=14)
+
+
+def label_repair_missing(music_font: Path, out: Path) -> None:
+    """Pages 2-3 repeat abbreviated labels that were once dropped: two 3-word
+    labels (read as running titles because they repeat), a "1&2 B Tpt." whose
+    transposition letter ends the label, and the group label "TBNS"."""
+    doc = pymupdf.open()
+    full = ["Alto Saxophone i & II", "Tenor Saxophone I & II", "Baritone Saxophone",
+            "Trumpet 1&2 in Bb", "Trombone 1&2", "Drum Set"]
+    short = ["A. Sx. I & II", "T. Sx. I & II", "B. Sx.", "1&2 B Tpt.", "TBNS", "Tbn.1&2", "D. S."]
+    for number, labels in enumerate([full, short, short], start=1):
+        page = doc.new_page(width=612, height=792)
+        page.insert_text((200, 60), "Synthetic Repair Tune", fontname="helv", fontsize=14)
+        page.insert_text((160, 95), "1", fontname="helv", fontsize=7)
+        rows = [(120 + i * 36.0, text) for i, text in enumerate(labels)]
+        if number > 1:  # the group label sits between the trumpet and trombone staves
+            rows = [(y, ("noise", t) if t == "TBNS" else t) for y, t in rows]
+        _repair_system(page, music_font, rows)
+    doc.save(out)
+
+
+def label_repair_noise(music_font: Path, out: Path) -> None:
+    """Non-label lines in the label column: a feel marking above the top staff, a
+    parenthesised cue and a "...only" note between staves. Rehearsal mark A and a
+    solo sit on the top staff, which the feel line used to hide."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Noise Tune", fontname="helv", fontsize=14)
+    labels = ["Soprano Saxophone", "Alto Saxophone", "Trumpet 1", ("noise", "(Memory out front)"),
+              "Trombone 1", "Piano", ("noise", "Drums only......"), "Drum Set"]
+    rows = [(150.0, ("noise", "Swing Feel in 8ths"))]
+    rows += [(180 + i * 36.0, t) for i, t in enumerate(labels)]
+    _repair_system(page, music_font, rows)
+    page.insert_text((220, 125), "A", fontname="helv", fontsize=12)
+    page.insert_text((160, 135), "9", fontname="helv", fontsize=7)
+    page.insert_text((300, 208), "ALTO SOLO", fontname="helv", fontsize=9)
+    doc.save(out)
+
+
+def label_repair_unlabeled(music_font: Path, out: Path) -> None:
+    """One staff in the middle has no label, and the text "Piano" is printed by
+    the title, not beside a staff."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Unlabeled Tune", fontname="helv", fontsize=14)
+    _right_label(page, 130, 80, "Piano")
+    labels = ["Trumpet in Bb", "Alto Saxophone", "Trombone", None, "Organ", "Drum Set"]
+    _repair_system(page, music_font, [(180 + i * 45.0, t) for i, t in enumerate(labels)])
+    doc.save(out)
+
+
+def label_repair_overprint(music_font: Path, out: Path) -> None:
+    """The Piccolo label is printed over the Alto Sax label on one line."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Overprint Tune", fontname="helv", fontsize=14)
+    _repair_system(page, music_font, [(150.0, "Piccolo"), (190.0, "Tenor Saxophone"), (226.0, "Drum Set")])
+    _right_label(page, 130, 152, "Alto Saxophone I & II")  # 2 pt below the Piccolo line
+    page.draw_line((150, 152), (580, 152))
+    page.insert_text((140, 152), MUSIC_GLYPHS, fontfile=str(music_font), fontname="SynMusic", fontsize=14)
+    doc.save(out)
+
+
 def scanned(src: Path, out: Path, dpi: int) -> None:
     """An image-only PDF: the source page rendered at `dpi`, no text layer."""
     with pymupdf.open(src) as doc:
@@ -386,6 +463,10 @@ def main() -> None:
         finale_solos(font, OUT / "finale_solos.pdf")
         right_aligned(font, OUT / "finale_right_aligned.pdf")
         repeated_solos(font, OUT / "finale_repeated_solos.pdf")
+        label_repair_missing(font, OUT / "label_repair_missing.pdf")
+        label_repair_noise(font, OUT / "label_repair_noise.pdf")
+        label_repair_unlabeled(font, OUT / "label_repair_unlabeled.pdf")
+        label_repair_overprint(font, OUT / "label_repair_overprint.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")

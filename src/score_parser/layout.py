@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from functools import cache
 
 from .data import load
+from .clefs import clef_ys, stray_labels
 from .models import Page, Token
 
 LINE_TOLERANCE = 3.0
@@ -20,6 +21,8 @@ COLUMN_SLACK = 40.0  # later labels may start this far right of the column found
 LABEL_GAP = 8.0  # a horizontal gap this wide ends the label
 STACK_GAP_FACTOR = 2.5
 MAX_LABEL_WORDS = 6
+OVERPRINT_FRACTION = 0.3  # words overlapping this much of the narrower one are overprinted
+MIN_OVERPRINT_STEP = 0.5  # and must sit at different heights
 MIN_HEADER_WORDS = 3  # a repeated line this long is a running title, not a label
 MIN_HEADER_PAGES = 2
 MIN_EXTRA_COLUMN = 3  # labels needed to accept a second column on a page
@@ -28,6 +31,7 @@ _TIME_SIGNATURE = re.compile(r"^(?:\d{1,2}/\d{1,2}|(?:[2-9]|1[0-2])[248])$")
 _CHORD = re.compile(
     r"^[A-G][#b♭♯]?(?:maj|min|dim|aug|sus|add|m|M|\+|°|ø)?\d*(?:[#b♭♯(]\d+\)?)*(?:/[A-G][#b♭♯]?)?$"
 )
+_DOTS = re.compile(r"\.{3,}|…")
 _BARE_ROOT = re.compile(r"^[A-G][#b♭♯]?$")
 _CONNECTORS = frozenset({"&", "-", "–", ",", "+"})  # between chairs: "1 & 2"
 _CHAIR_LETTERS = frozenset("iIvVxX")  # roman numeral chairs
@@ -56,9 +60,32 @@ def lines(tokens: list[Token]) -> list[list[Token]]:
             grouped[-1].append(tok)
         else:
             grouped.append([tok])
+    separated: list[list[Token]] = []
     for ln in grouped:
         ln.sort(key=lambda t: t.x0)
-    return grouped
+        separated += _split_overprint(ln)
+    return separated
+
+
+def _overlaps(a: Token, b: Token) -> bool:
+    """Whether two words are printed over each other (more than a third of the
+    narrower one), as opposed to touching."""
+    overlap = min(a.x1, b.x1) - max(a.x0, b.x0)
+    return overlap > OVERPRINT_FRACTION * min(a.x1 - a.x0, b.x1 - b.x0)
+
+
+def _split_overprint(ln: list[Token]) -> list[list[Token]]:
+    """One visual line, or two when words in it are printed over each other:
+    the words are cut at the biggest vertical step between them, upper line
+    first, so an overprinted label is read as two labels."""
+    if len(ln) < 2 or not any(_overlaps(a, b) for a, b in zip(ln, ln[1:])):
+        return [ln]
+    by_y = sorted(ln, key=lambda t: t.yc)
+    steps = [b.yc - a.yc for a, b in zip(by_y, by_y[1:])]
+    if max(steps) < MIN_OVERPRINT_STEP:
+        return [ln]
+    cut = steps.index(max(steps)) + 1
+    return [sorted(part, key=lambda t: t.x0) for part in (by_y[:cut], by_y[cut:])]
 
 
 def _text_lines(page: Page) -> list[list[Token]]:
@@ -79,6 +106,17 @@ def _is_chord_or_glyph(text: str) -> bool:
     return _CHORD.match(text) is not None or _is_glyph_residue(text)
 
 
+def _is_transposition_letter(previous: Token, following: Token | None) -> bool:
+    """"1&2 B Tpt.": a bare B between a chair and a word is the instrument's
+    key, not a chord."""
+    return (
+        following is not None
+        and any(c.isdigit() for c in previous.text)
+        and len(following.text.strip(".")) >= 3
+        and following.text.strip(".").isalpha()
+    )
+
+
 def _ends_label(tok: Token, previous: Token, following: Token | None) -> bool:
     """Whether `tok` (not the first of its line) starts what follows a label:
     a time signature, a chord symbol or glyph residue."""
@@ -88,6 +126,8 @@ def _ends_label(tok: Token, previous: Token, following: Token | None) -> bool:
     if not any(c.isalnum() for c in text) and text not in _CONNECTORS:
         return True
     if previous.text.lower() == "in":  # "Trumpet in Bb": a transposition, not a chord
+        return False
+    if _BARE_ROOT.match(text) and _is_transposition_letter(previous, following):
         return False
     if _CHORD.match(text):
         return True
@@ -142,6 +182,13 @@ def _is_glyph_residue(text: str) -> bool:
     return word.isalpha() and (len(word) <= 2 or len(set(word.lower())) == 1)
 
 
+def _is_note_line(text: str) -> bool:
+    """A line that is a cue or note, not a label: wholly in parentheses, or
+    trailing dots ("Drums only......")."""
+    stripped = text.strip()
+    return (stripped.startswith("(") and stripped.endswith(")")) or bool(_DOTS.search(stripped))
+
+
 def _is_not_a_label(text: str) -> bool:
     words = _words(text)
     if not words:
@@ -152,10 +199,19 @@ def _is_not_a_label(text: str) -> bool:
         or text.lower().strip(".") in filters["markings"]
         or _words_key(text) in filters["group_words"]
         or filters["instruction_words"].intersection(words)
+        or _is_note_line(text)
         or words[0] in ("score", "conductor")
         or words[0] in filters["header_words"]
         or len(text.split()) > MAX_LABEL_WORDS
     )
+
+
+def _is_title_like(key: str) -> bool:
+    """A repeated line reads as a running title when it has several words, at
+    least two of them real words ("Synthetic Tune Two"), not abbreviations and
+    chair numerals ("A. Sx. I & II" repeats too, and is a label)."""
+    words = key.split()
+    return len(words) >= MIN_HEADER_WORDS and sum(len(w) >= 4 for w in words) >= 2
 
 
 def running_headers(pages: list[Page]) -> frozenset[str]:
@@ -164,7 +220,7 @@ def running_headers(pages: list[Page]) -> frozenset[str]:
     for page in pages:
         for ln in _text_lines(page):
             key = _words_key(" ".join(t.text for t in _label_prefix(ln)))
-            if len(key.split()) >= MIN_HEADER_WORDS:
+            if _is_title_like(key):
                 seen.setdefault(key, set()).add(page.number)
     return frozenset(k for k, nums in seen.items() if len(nums) >= MIN_HEADER_PAGES)
 
@@ -212,7 +268,10 @@ def _stack_labels(page: Page, headers: frozenset[str]) -> list[list[Token]]:
         if _is_not_a_label(text) or _words_key(text) in headers:
             continue
         labels.append(label)
-    return _label_column(labels)
+    column = _label_column(labels)
+    clefs = clef_ys(page, max((lb[-1].x1 for lb in column), default=0.0))
+    stray = stray_labels([lb[0].yc for lb in column], clefs)
+    return [lb for lb in column if lb[0].yc not in stray]
 
 
 def label_stacks(page: Page, headers: frozenset[str] = frozenset()) -> list[list[TextLine]]:

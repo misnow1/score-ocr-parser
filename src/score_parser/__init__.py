@@ -8,6 +8,7 @@ from .flow import build_flow
 from .instruments import build_instrumentation, vocabulary_hits
 from .matching import draft_name, match_slug
 from .models import PageInfo, ParseOptions, ScoreReport
+from .staves import unlabeled_staff_warnings
 from .source import read_pages, scan_warnings
 from .title import score_title
 
@@ -21,6 +22,7 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
     pages = [clean(p) for p in read_pages(path, options.force_ocr, vocabulary_hits)]
     instrumentation = build_instrumentation(pages)
     warnings = [w for p in pages for w in scan_warnings(p)] + instrumentation.warnings
+    warnings += unlabeled_staff_warnings(pages)
     if not instrumentation.entries:
         warnings.append("no instrumentation found: the first system's labels could not be read")
     title, title_source = score_title(path, pages)

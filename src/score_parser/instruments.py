@@ -14,6 +14,7 @@ from .models import InstrumentEntry, Page, Token
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
 _NUM = r"(?:\d+|i{1,3}|iv|v)"
 _CHAIRS = re.compile(rf"(?:\s+|(?<=\.))({_NUM}(?:\s*(?:-|–|&|,|and)\s*{_NUM})*)\s*$", re.I)
+_LEADING_CHAIRS = re.compile(rf"^({_NUM}(?:\s*(?:-|–|&|,)\s*{_NUM})*)\s+(?=[a-z])", re.I)  # "1&2 B Tpt."
 _CHAIR_PART = re.compile(rf"({_NUM})|(-|–)", re.I)
 _TRANSPOSITION = re.compile(r"\bin\s+[a-g][b#♭♯]?(?=\s|$)", re.I)
 _PARENS = re.compile(r"\(([^)]*)\)")
@@ -104,9 +105,13 @@ def resolve(label: str) -> Resolved | None:
 def _resolve_part(text: str) -> Resolved | None:
     chairs: list[int] = []
     m = _CHAIRS.search(text)
+    lead = _LEADING_CHAIRS.match(text.strip())
     if m:
         chairs = _chairs(m.group(1))
         text = text[: m.start()]
+    elif lead:
+        chairs = _chairs(lead.group(1))
+        text = text.strip()[lead.end() :]
     hit = _table().get(_normalise(text))
     if hit is None:
         return None
