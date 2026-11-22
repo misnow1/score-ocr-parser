@@ -42,6 +42,11 @@ class Resolved:
 
 
 @cache
+def _review_notes() -> dict[str, str]:
+    return {i["name"]: i["review"] for i in _data() if i.get("review")}
+
+
+@cache
 def _data() -> list[dict]:
     return load("aliases.yaml")["instruments"]
 
@@ -323,6 +328,9 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
                 entry.doublings += [
                     d for d in doubled if d != entry.instrument and d not in entry.doublings
                 ]
+    for name, text in _review_notes().items():
+        if name in entries:
+            warnings[f"{name}: {text}; review"] = None
     return Instrumentation(list(entries.values()), unknown, list(warnings), roster)
 
 

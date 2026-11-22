@@ -117,3 +117,24 @@ def test_bar_numbers_printed_below_each_system_are_read():
     got = {(f.instrument, f.bar) for f in report.features}
     # 41-44 sit under the first system, 45-48 under the second; the 3 3 3 inside it are triplets
     assert got == {("Trombone", 43), ("Alto Sax", 45)}
+
+def test_solo_naming_an_instrument_missing_from_the_score_is_kept_as_a_possible_feature():
+    report = parse_score(FIXTURES / "finale_absent_instrument_solo.pdf")
+
+    (feature,) = report.features
+    assert feature.instrument == "Violin"  # named by the text, not guessed from the Piano staff
+    assert feature.confidence < 0.8
+    assert any("not in this score's instrumentation" in r for r in feature.reasons)
+    assert "Violin" not in {e.instrument for e in report.instrumentation}
+
+
+def test_possible_feature_gets_a_todo_in_the_flow_draft(tmp_path):
+    from score_parser.cli import main
+
+    out = tmp_path / "out"
+    pdf = FIXTURES / "finale_absent_instrument_solo.pdf"
+    assert main(["parse", str(pdf), "--out", str(out), "--format", "yaml"]) == 0
+    (path,) = out.glob("*.yaml")
+    text = path.read_text()
+    assert "violin" in text.lower()
+    assert "# TODO(score-parser)" in text and "not in this score's instrumentation" in text

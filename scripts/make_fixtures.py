@@ -642,6 +642,18 @@ def pattern_scanned(src: Path, out: Path, dpi: int = 300) -> None:
     scan.save(out, deflate=True)
 
 
+def absent_instrument_solo(music_font: Path, out: Path) -> None:
+    """A "VIOLIN SOLO" on a score whose instrumentation has no violin, and a bare "SOLO"."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Tune Absent", fontname="helv", fontsize=24)
+    _system(p1, 150, ["Alto Saxophone 1", "Piano"], music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7),
+        (320, ys_at(150, 1) - 12, "VIOLIN SOLO", 9),
+    ])
+    doc.save(out)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
@@ -703,6 +715,7 @@ def main() -> None:
         vocal_leads(font, OUT / "finale_vocal_leads.pdf")
         distinct_solos(font, OUT / "finale_distinct_solos.pdf")
         shared_solos(font, OUT / "finale_shared_solos.pdf")
+        absent_instrument_solo(font, OUT / "finale_absent_instrument_solo.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")
