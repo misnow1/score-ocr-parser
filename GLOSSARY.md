@@ -19,7 +19,8 @@
 - **Recurring instrument**: an instrument the first system lacks that labels two or more later systems. It joins the instrumentation; a one-off later label for a missing instrument still warns.
 - **Combined label**: one staff label naming several instruments ("Trb. 3, Tba."). Each part is resolved and cross-checked on its own; a solo marked above such a staff is not assigned to any one part.
 - **Instrument variant**: a canonical name that counts as the same instrument as another for the later-system cross-check (Bass and Electric Bass). One rule, `present_as`, data in `instrument_variants.yaml`.
-- **Chair**: a numbered seat within a section ("Trumpet 2"). Not an instrument.
+- **Chair**: a numbered seat within a section ("Trumpet 2"). Not an instrument. A feature carries its chair when the marking text or its staff gives one.
+- **Shared staff**: one staff printed for several chairs ("Gtrs.", "Guitars", "Gtr. 1 & 2"). A feature on it has an ambiguous chair, reported as such and never guessed.
 - **Canonical instrument**: the normalised name from the alias table ("Alto Sax").
 - **Unknown label**: a staff label the alias table cannot resolve. Reported, never guessed.
 - **Doubling**: a second instrument a player picks up.
