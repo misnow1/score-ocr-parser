@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal, NamedTuple
 
-from .layout import is_chord_symbol, running_headers, strip_chord_run
+from .layout import count_chords, is_chord_symbol, running_headers, strip_chord_run
 from .instruments import Roster, resolve, resolve_against_first_system
 from .models import Feature, FeatureKind, Location, Page, Participant, Voice
 from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
@@ -38,9 +38,11 @@ BAR_EVIDENCE: dict[BarKind, float] = {
     "ocr": BAR_GUESSED,  # barlines cannot be counted on a scan
     "missing": 0.0,
 }
+CHORD_ONLY_WORDING = 0.1  # penalty: the wording was a chord plus a bare "Solo"
 INSTRUMENT_ABSENT = 0.1  # named in the text but not in the instrumentation: a possible feature
 VOICE_NAMED = 0.3  # a vocal lead whose text names the voice ("Female Lead")
 VOICE_FROM_STAFF = 0.15  # a bare "solo" above a Voice Lead F/M staff
+VOICE_STAFF_CUE = 0.15  # a bare "solo" above a choir or other voice staff: a vocal lead, no voice
 
 
 def _named_instrument(
@@ -143,6 +145,14 @@ class Candidate:
     chair_ambiguous: bool = False  # the staff is shared by several chairs
     voice: Voice | None = None  # vocal leads only
     section: str | None = None  # vocal leads only
+    voice_system_index: int | None = None  # vocal leads only: position among the systems that have voice staves
+
+    @property
+    def neighbour_index(self) -> int:
+        """Where the system sits for deciding what is next to what. A vocal lead is
+        printed on the voice systems alone, so the rhythm-section system between
+        two of them (a page's second stack) does not separate them."""
+        return self.system_index if self.voice_system_index is None else self.voice_system_index
 
     @property
     def key(self) -> MergeKey:
@@ -279,15 +289,12 @@ def _vocal_candidate(
     text: str,
     voice: Voice | None,
     section: str | None,
-    from_text: bool,
+    evidence: float,
+    why: str,
 ) -> Candidate:
-    """A vocal lead: its voice named by the text, or taken from the Voice Lead staff."""
+    """A vocal lead, with the evidence for its voice (which may be none)."""
     system = context.system
     reading = system.bar_at(phrase.x0)
-    if from_text:
-        evidence, why = VOICE_NAMED, "voice named in text"
-    else:
-        evidence, why = VOICE_FROM_STAFF, "voice taken from the Voice Lead staff below"
     reasons = ["matched vocal lead wording", why, reading.reason]
     return Candidate(
         kind="vocal lead",
@@ -306,25 +313,35 @@ def _vocal_candidate(
         staff="",
         voice=voice,
         section=section,
+        voice_system_index=sum(
+            any(st.voice for st in sys.staves) for sys in context.systems[: context.index + 1]
+        ),
     )
 
 
 def _vocal_wording(
     context: SystemContext, phrase: Phrase, text: str, roster: Roster
 ) -> "Candidate | _Dropped | None":
-    """The vocal lead a phrase marks, else None: "Female Lead Verse 1", or a
-    bare solo above a Voice Lead staff. A solo above a backing vocal staff is
+    """The vocal lead a phrase marks, else None: "Female Lead Verse 1", a bare
+    solo above a Voice Lead staff, or a bare solo above any other voice staff
+    (a choir: a lead with no voice). A solo above a backing vocal staff is
     printed for the lead text beside it and is dropped."""
     lead = lead_text(text)
     if lead:
-        return _vocal_candidate(context, phrase, text, lead[0], lead[1], True)
+        return _vocal_candidate(context, phrase, text, lead[0], lead[1], VOICE_NAMED, "voice named in text")
     hit = _match(text)
-    staff = voice_staff(context.system.staff_for(phrase.yc).label)
-    if hit is None or staff is None or _named_instrument(hit[1], roster, []):
+    below = context.system.staff_for(phrase.yc)
+    if hit is None or not below.voice or _named_instrument(hit[1], roster, []):
         return None
+    staff = voice_staff(below.label)
+    if staff is None:
+        why = f"voice staff '{below.label}' below: a vocal lead with no voice"
+        return _vocal_candidate(context, phrase, text, None, None, VOICE_STAFF_CUE, why)
     if staff[0] == "backing":
         return _DROPPED
-    return _vocal_candidate(context, phrase, text, staff[1], None, False)
+    return _vocal_candidate(
+        context, phrase, text, staff[1], None, VOICE_FROM_STAFF, "voice taken from the Voice Lead staff below"
+    )
 
 
 def collect_candidates(
@@ -336,8 +353,9 @@ def collect_candidates(
     for index, system in enumerate(systems):
         for phrase in system.texts:
             text = strip_chords(phrase.text)
-            if text != phrase.text and _match(text) == ("solo", ""):
-                continue  # chord text over a bare "Solo": a chart label, not a feature
+            chord_only = text != phrase.text and _match(text) == ("solo", "")
+            if chord_only and sum(map(count_chords, phrase.text.split())) > 1:
+                continue  # several chords over a bare "Solo": a chart label, not a feature
             context = SystemContext(systems, index, roster)
             vocal = _vocal_wording(context, phrase, text, roster)
             if vocal is _DROPPED:
@@ -350,9 +368,11 @@ def collect_candidates(
                 continue
             notes: list[str] = []
             kind, prefix = hit
-            candidates.append(
-                _candidate(kind, prefix, text, context, phrase, notes)
-            )
+            candidate = _candidate(kind, prefix, text, context, phrase, notes)
+            if chord_only:  # one chord plus "Solo": kept, but only as a possible feature
+                candidate.evidence -= CHORD_ONLY_WORDING
+                candidate.reasons.append("wording was only chord text plus 'Solo'")
+            candidates.append(candidate)
             for note in notes:
                 warnings[f"Page {system.page}: solo/feature '{text}': {note}"] = None
     return candidates, list(warnings)
@@ -366,7 +386,7 @@ def _is_reminder_of(c: Candidate, group: list[Candidate]) -> bool:
     it is on the same or the next system, in the first bar of a later row,
     on no other chair (on a later system), and no more than a row of bars on."""
     last = group[-1]
-    if c.system_index - last.system_index > 1:
+    if c.neighbour_index - last.neighbour_index > 1:
         return False
     if c.row != last.row and not c.opens_row:
         return False

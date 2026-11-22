@@ -166,6 +166,14 @@ def _label_prefix(row: list[Token]) -> list[Token]:
     return label
 
 
+def count_chords(word: str) -> int:
+    """How many chord symbols a word is made of ("F#min7(b5)/EE9" is 2); 0 for
+    a word that is not chord text."""
+    if not (is_chord_symbol(word) or strip_chord_run(word) != word):
+        return 0
+    return len(re.findall(_CHORD_BODY, word[: len(word) - len(strip_chord_run(word))]))
+
+
 def strip_chord_run(text: str) -> str:
     """The word without chord symbols glued to it: "F#min7(b5)/EE9" (two chords
     run together) -> "", "E9Solo" -> "Solo". Anything left must start a

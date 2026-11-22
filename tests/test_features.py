@@ -111,6 +111,13 @@ def test_different_chairs_stay_separate_and_a_restated_chair_merges():
     assert got == [(1, 2, 49, [(2, 49), (2, 57)]), (2, 3, 65, [(3, 65)])]
 
 
+def test_bar_numbers_printed_below_each_system_are_read():
+    report = parse_score(FIXTURES / "finale_bar_numbers_below.pdf")
+
+    got = {(f.instrument, f.bar) for f in report.features}
+    # 41-44 sit under the first system, 45-48 under the second; the 3 3 3 inside it are triplets
+    assert got == {("Trombone", 43), ("Alto Sax", 45)}
+
 def test_solo_naming_an_instrument_missing_from_the_score_is_kept_as_a_possible_feature():
     report = parse_score(FIXTURES / "finale_absent_instrument_solo.pdf")
 
@@ -137,9 +144,19 @@ def test_chord_text_glued_to_solo_wording_is_stripped_and_never_makes_a_feature(
     report = parse_score(FIXTURES / "finale_chord_text_solos.pdf")
 
     got = sorted((f.instrument, f.page, f.raw_text) for f in report.features)
-    # chord text before a bare "Solo" (glued "F#min7(b5)/EE9 Solo", "E9Solo") is not a feature,
+    # several chords before a bare "Solo" (glued "F#min7(b5)/EE9 Solo", "E9 Dm7Solo" is one) are a chart label, not a feature,
     # nor is a lone chord ("G7C"); named solos keep their wording without the chords
     assert got == [
         ("Alto Sax", 1, "ALTO SOLO"),
+        ("Guitar", 2, "SOLO"),  # one chord before a bare SOLO: kept, see the next test
         ("Trombone", 1, "TBN SOLO"),
     ]
+
+
+def test_one_chord_before_a_bare_solo_is_a_low_confidence_possible_feature():
+    report = parse_score(FIXTURES / "finale_chord_text_solos.pdf")
+
+    guitar = next(f for f in report.features if f.page == 2)
+    assert guitar.confidence < 0.8
+    assert any("only chord text plus 'Solo'" in r for r in guitar.reasons)
+    assert any(step.todo for step in report.flow if "Guitar" in step.section)

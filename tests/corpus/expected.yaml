@@ -94,21 +94,21 @@ scores:
   "I HEARD THE BELLS ON CHRISTMAS DAY- SCORE.":
     # Seven features: six vocal cues over the SATB staves (a choir label stays out of the
     # instrument table) and one clarinet solo. Pages only, apart from the first start bar.
-    # Cap is 8 until the p1/p2 vocal solo stops being reported as two features; lower it to 7 then.
-    max_features: 8
+    max_features: 7
     features:
       # One vocal solo (first time), all in unison on the repeat; it starts before the repeat and carries to p2.
-      - {instrument: Vocal, kind: vocal, page: 1, bar: 4, xfail: "reported as two instrument-less solos (p1 bar 4, p2 bar 9)"}
-      - {instrument: Vocal, kind: vocal, page: 5, xfail: "reported as an instrument-less solo above the SATB staff (a tenor/bass vocal solo)"}
+      - {instrument: Vocal, kind: vocal, page: 1, bar: 4}
+      # A tenor/bass-line vocal solo.
+      - {instrument: Vocal, kind: vocal, page: 5}
       # "Solo or All": left to the conductor or vocalist.
-      - {instrument: Vocal, kind: vocal, page: 6, xfail: "reported as an instrument-less solo above the SATB staff"}
-      - {instrument: Vocal, kind: vocal, page: 10, xfail: "reported as an instrument-less solo above the SATB staff"}
-      - {instrument: Vocal, kind: vocal, page: 12, xfail: "reported as an instrument-less solo above the SATB staff"}
+      - {instrument: Vocal, kind: vocal, page: 6}
+      - {instrument: Vocal, kind: vocal, page: 10}
+      - {instrument: Vocal, kind: vocal, page: 12}
       # The p13 marking is on the TB line of the SATB staves, not the piano.
-      - {instrument: Vocal, kind: vocal, page: 13, xfail: "reported as a Piano solo"}
+      - {instrument: Vocal, kind: vocal, page: 13}
       - {instrument: Clarinet, page: 16}
     not_features:
-      - {instrument: Piano, page: 13, xfail: "the p13 marking is a vocal (TB) solo, reported as Piano"}
+      - {instrument: Piano, page: 13}
 
   "I Pray on Christmas extended version nov Score":
     # Three features: a piano solo vamp, a tuba solo while the bass is tacet, and a tuba solo break.
@@ -155,8 +155,8 @@ scores:
       - Drums
     # One feature: a group of solos over bars 45-77 inside a repeat (slashes on every staff but the organ
     # and drums; bar 77 is marked "lead only"). Who plays is not clear, so no instrument is asserted
-    # beyond the Guitar, whose part shows it. The tool reports one feature (the "(SOLOS)" marking, copies merged;
-    # the guitar solo built from chord text is gone) and no bars.
+    # beyond the Guitar, whose part shows it. The tool reports one feature, the "(SOLOS)" marking (p2, bar 45;
+    # copies merged); the guitar solo built from chord text (p4) is gone.
     max_features: 1
     features:
-      - {instrument: Guitar, bar: 45, xfail: "no bar numbers are read on this score; the marking is reported on p2 and p4 with bar None"}
+      - {instrument: Guitar, bar: 45}
