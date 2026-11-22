@@ -109,3 +109,25 @@ def test_different_chairs_stay_separate_and_a_restated_chair_merges():
     guitars = [f for f in report.features if f.instrument == "Guitar"]
     got = [(f.chair, f.page, f.bar, [(loc.page, loc.bar) for loc in f.locations]) for f in guitars]
     assert got == [(1, 2, 49, [(2, 49), (2, 57)]), (2, 3, 65, [(3, 65)])]
+
+
+def test_solo_naming_an_instrument_missing_from_the_score_is_kept_as_a_possible_feature():
+    report = parse_score(FIXTURES / "finale_absent_instrument_solo.pdf")
+
+    (feature,) = report.features
+    assert feature.instrument == "Violin"  # named by the text, not guessed from the Piano staff
+    assert feature.confidence < 0.8
+    assert any("not in this score's instrumentation" in r for r in feature.reasons)
+    assert "Violin" not in {e.instrument for e in report.instrumentation}
+
+
+def test_possible_feature_gets_a_todo_in_the_flow_draft(tmp_path):
+    from score_parser.cli import main
+
+    out = tmp_path / "out"
+    pdf = FIXTURES / "finale_absent_instrument_solo.pdf"
+    assert main(["parse", str(pdf), "--out", str(out), "--format", "yaml"]) == 0
+    (path,) = out.glob("*.yaml")
+    text = path.read_text()
+    assert "violin" in text.lower()
+    assert "# TODO(score-parser)" in text and "not in this score's instrumentation" in text
