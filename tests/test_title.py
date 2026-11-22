@@ -24,6 +24,9 @@ def parse_as(tmp_path, name, fixture="finale_solos.pdf"):
         ("AJC 2026 Jingle Bells (copy 2).pdf", "Jingle Bells"),
         ("Jingle Bells score 2026-11-21 Copy.pdf", "Jingle Bells"),
         ("jingle bells 20261121.pdf", "jingle bells"),
+        ("ERGUE A CASA - Piano.pdf", "ERGUE A CASA"),
+        ("Jingle Bells - Trumpet 1.pdf", "Jingle Bells"),
+        ("Piano Man.pdf", "Piano Man"),
     ],
 )
 def test_filename_noise_is_removed(tmp_path, filename, title):

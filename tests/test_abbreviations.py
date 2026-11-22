@@ -119,3 +119,22 @@ def test_chair_range_resolves_from_the_label_itself(tmp_path):
     assert chairs(ok)["Trombone"] == [1, 2]
     wide = parse_score(make_score(tmp_path / "wide.pdf", [(150, first), (500, ["Trb. 1-3"])]))
     assert any("chairs [1, 2, 3]" in w for w in wide.warnings)
+
+
+@pytest.mark.parametrize(
+    ("label", "instrument"),
+    [
+        ("W BL", "Wood Block"),
+        ("W. Bl.", "Wood Block"),
+        ("Wood Block", "Wood Block"),
+        ("C BL", "Cowbell"),
+        ("C. Bl.", "Cowbell"),
+        ("Cowbell", "Cowbell"),
+    ],
+)
+def test_wood_block_and_cowbell_resolve(tmp_path, label, instrument):
+    # Not on the first system: recurring on two later systems, so it joins.
+    pdf = make_score(tmp_path / "s.pdf", [(150, FIRST), (400, [label]), (550, [label])])
+    report = parse_score(pdf)
+    assert instrument in chairs(report)
+    assert report.unknown_labels == []
