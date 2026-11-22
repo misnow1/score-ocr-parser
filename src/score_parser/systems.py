@@ -19,6 +19,7 @@ from .measures import (
 )
 from .models import Page, Source, Token
 from .staves import Staff, owning_system, staff_at
+from .vocal import voice_lines
 
 PHRASE_GAP = 20.0  # horizontal gap that separates two annotations on one line
 
@@ -84,7 +85,8 @@ def find_systems(page: Page, headers: frozenset[str] = frozenset()) -> list[Syst
     systems = []
     for i, stack in enumerate(stacks):
         barlines, rule_y = barlines_through(page.barlines, [ln.yc for ln in stack])
-        staves = [Staff(ln.text, ln.yc) for ln in stack]
+        voices = voice_lines([ln.text for ln in stack], [ln.yc for ln in stack])
+        staves = [Staff(ln.text, ln.yc, i in voices) for i, ln in enumerate(stack)]
         systems.append(System(page.number, i, staves, source=page.source, barlines=barlines, rule_y=rule_y))
     for above, below in zip(systems, systems[1:]):
         below.joins_previous = share_barlines(page.barlines, above.rule_y, below.rule_y)

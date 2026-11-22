@@ -10,6 +10,7 @@ import pymupdf
 from .data import load
 from .layout import TextLine, instruction_lines, label_stacks, running_headers
 from .models import InstrumentEntry, Page, Token
+from .vocal import voice_lines
 
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
 _NUM = r"(?:\d+|i{1,3}|iv|v)"
@@ -258,6 +259,13 @@ def _recurring_names(
     return [n for n in names if systems_of[n] >= 2]
 
 
+def _without_voices(stack: list[TextLine]) -> list[TextLine]:
+    """The stack's instrument staves: voice staves are not instruments and are
+    neither listed nor reported as unknown labels."""
+    voices = voice_lines([ln.text for ln in stack], [ln.yc for ln in stack])
+    return [ln for i, ln in enumerate(stack) if i not in voices]
+
+
 def build_instrumentation(pages: list[Page]) -> Instrumentation:
     """First system's full names, cross-checked against abbreviated labels on
     later systems."""
@@ -266,7 +274,7 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
     warnings: dict[str, None] = {}
 
     headers = running_headers(pages)
-    stacks = [(p.number, st) for p in pages for st in label_stacks(p, headers)]
+    stacks = [(p.number, _without_voices(st)) for p in pages for st in label_stacks(p, headers)]
     if not stacks:
         return Instrumentation([], [], [])
     first = _first_system(stacks)

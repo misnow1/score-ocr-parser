@@ -198,6 +198,8 @@ def _candidate(
         # is not the soloist's (copies are printed above every staff).
         reasons.append("named instrument is not in the instrumentation; instrument unknown")
         staff_label = ""
+    elif staff.voice:
+        reasons.append(f"staff '{staff.label}' is a voice staff, not an instrument")
     else:
         check = resolve_against_first_system(staff.label, roster)
         if check.hit and check.hit.also:

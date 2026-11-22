@@ -83,8 +83,16 @@ def test_combined_label_with_unknown_part_stays_unrecognised(tmp_path):
     assert any("not recognised" in w for w in report.warnings)
 
 
-@pytest.mark.parametrize("label", ["SATB", "Choir", "Voice Lead", "Voice bck", "VCLS", "A.", "Bar."])
-def test_choir_and_ambiguous_labels_stay_unrecognised(tmp_path, label):
+@pytest.mark.parametrize("label", ["SATB", "Choir", "Voice Lead", "Voice bck"])
+def test_choir_and_voice_labels_are_voice_staves_not_warnings(tmp_path, label):
+    pdf = make_score(tmp_path / "s.pdf", [(150, FIRST), (500, [label])])
+    report = parse_score(pdf)
+    assert report.warnings == [] and report.unknown_labels == []
+    assert label not in [lb for e in report.instrumentation for lb in e.labels]
+
+
+@pytest.mark.parametrize("label", ["VCLS", "A.", "Bar."])
+def test_ambiguous_labels_stay_unrecognised(tmp_path, label):
     pdf = make_score(tmp_path / "s.pdf", [(150, FIRST), (500, [label])])
     report = parse_score(pdf)
     assert any(f"'{label}' is not recognised" in w for w in report.warnings)

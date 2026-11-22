@@ -26,6 +26,7 @@
 - **Chair**: a numbered seat within a section ("Trumpet 2"). Not an instrument. A feature carries its chair when the marking text or its staff gives one.
 - **Shared staff**: one staff printed for several chairs ("Gtrs.", "Guitars", "Gtr. 1 & 2"). A feature on it has an ambiguous chair, reported as such and never guessed.
 - **Canonical instrument**: the normalised name from the alias table ("Alto Sax").
+- **Voice staff**: a staff of a vocal part, never an instrument and never an unknown label: a "Voice Lead F"/"Voice bck" staff, a choir label ("SATB", "TB", "Choir"), a run of two or more part abbreviations ("A.", "Bar."), or a staff printed under a "VOCALS" group label (the group label sits between its staves, closer to both than staves are to each other). Decided in one place, `voice_lines` in `vocal.py`; `Staff.voice` carries it to the feature stage. Voice staves stay out of the instrument table.
 - **Unknown label**: a staff label the alias table cannot resolve. Reported, never guessed.
 - **Doubling**: a second instrument a player picks up.
 - **Feature**: a solo or featured passage. In code `Feature.kind` is `solo` (solo wording), `feature` (the word "feature") or `vocal lead`, so "feature" means both the whole class and one kind of it.
