@@ -12,7 +12,7 @@ from typing import Literal, NamedTuple
 from .layout import is_chord_symbol, running_headers
 from .instruments import Roster, resolve, resolve_against_first_system
 from .models import Feature, FeatureKind, Location, Page
-from .measures import current_mark
+from .measures import current_mark, drop_out_of_sequence
 from .systems import Phrase, System, find_systems
 
 _KEYWORD = re.compile(r"\b(solos?|feature)\b", re.I)
@@ -320,5 +320,6 @@ def find_features(
     anything else is dropped with a warning."""
     headers = running_headers(pages)
     systems = [s for page in pages for s in find_systems(page, headers)]
+    drop_out_of_sequence(systems)
     candidates, warnings = collect_candidates(systems, roster)
     return [build_feature(g) for g in merge_candidates(candidates)], warnings
