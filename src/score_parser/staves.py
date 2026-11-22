@@ -24,9 +24,19 @@ class HasStaves(Protocol):
     staves: list[Staff]
 
 
+VOICE_REACH = 0.3  # of the gap to the next staff: a choir label sits at the middle of its staves
+
+
 def staff_at(staves: list[Staff], yc: float) -> Staff:
-    """The staff a text above a staff belongs to: the first one at or below it."""
-    return next((s for s in staves if s.yc >= yc - LINE_TOLERANCE), staves[-1])
+    """The staff a text above a staff belongs to: the first one at or below it.
+
+    A choir label ("SATB") is printed at the middle of its two staves, so a text
+    just below it is above the lower choir staff, not above the staff after it."""
+    index = next((i for i, s in enumerate(staves) if s.yc >= yc - LINE_TOLERANCE), len(staves) - 1)
+    above = staves[index - 1] if index > 0 else None
+    if above and above.voice and yc - above.yc < VOICE_REACH * (staves[index].yc - above.yc):
+        return above
+    return staves[index]
 
 
 def _distance(staves: list[Staff], yc: float) -> float:

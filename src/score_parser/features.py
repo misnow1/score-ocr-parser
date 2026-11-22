@@ -41,6 +41,7 @@ BAR_EVIDENCE: dict[BarKind, float] = {
 INSTRUMENT_ABSENT = 0.1  # named in the text but not in the instrumentation: a possible feature
 VOICE_NAMED = 0.3  # a vocal lead whose text names the voice ("Female Lead")
 VOICE_FROM_STAFF = 0.15  # a bare "solo" above a Voice Lead F/M staff
+VOICE_STAFF_CUE = 0.15  # a bare "solo" above a choir or other voice staff: a vocal lead, no voice
 
 
 def _named_instrument(
@@ -142,6 +143,14 @@ class Candidate:
     chair_ambiguous: bool = False  # the staff is shared by several chairs
     voice: Voice | None = None  # vocal leads only
     section: str | None = None  # vocal leads only
+    voice_system_index: int | None = None  # vocal leads only: position among the systems that have voice staves
+
+    @property
+    def neighbour_index(self) -> int:
+        """Where the system sits for deciding what is next to what. A vocal lead is
+        printed on the voice systems alone, so the rhythm-section system between
+        two of them (a page's second stack) does not separate them."""
+        return self.system_index if self.voice_system_index is None else self.voice_system_index
 
     @property
     def key(self) -> MergeKey:
@@ -278,15 +287,12 @@ def _vocal_candidate(
     text: str,
     voice: Voice | None,
     section: str | None,
-    from_text: bool,
+    evidence: float,
+    why: str,
 ) -> Candidate:
-    """A vocal lead: its voice named by the text, or taken from the Voice Lead staff."""
+    """A vocal lead, with the evidence for its voice (which may be none)."""
     system = context.system
     reading = system.bar_at(phrase.x0)
-    if from_text:
-        evidence, why = VOICE_NAMED, "voice named in text"
-    else:
-        evidence, why = VOICE_FROM_STAFF, "voice taken from the Voice Lead staff below"
     reasons = ["matched vocal lead wording", why, reading.reason]
     return Candidate(
         kind="vocal lead",
@@ -305,25 +311,35 @@ def _vocal_candidate(
         staff="",
         voice=voice,
         section=section,
+        voice_system_index=sum(
+            any(st.voice for st in sys.staves) for sys in context.systems[: context.index + 1]
+        ),
     )
 
 
 def _vocal_wording(
     context: SystemContext, phrase: Phrase, text: str, roster: Roster
 ) -> "Candidate | _Dropped | None":
-    """The vocal lead a phrase marks, else None: "Female Lead Verse 1", or a
-    bare solo above a Voice Lead staff. A solo above a backing vocal staff is
+    """The vocal lead a phrase marks, else None: "Female Lead Verse 1", a bare
+    solo above a Voice Lead staff, or a bare solo above any other voice staff
+    (a choir: a lead with no voice). A solo above a backing vocal staff is
     printed for the lead text beside it and is dropped."""
     lead = lead_text(text)
     if lead:
-        return _vocal_candidate(context, phrase, text, lead[0], lead[1], True)
+        return _vocal_candidate(context, phrase, text, lead[0], lead[1], VOICE_NAMED, "voice named in text")
     hit = _match(text)
-    staff = voice_staff(context.system.staff_for(phrase.yc).label)
-    if hit is None or staff is None or _named_instrument(hit[1], roster, []):
+    below = context.system.staff_for(phrase.yc)
+    if hit is None or not below.voice or _named_instrument(hit[1], roster, []):
         return None
+    staff = voice_staff(below.label)
+    if staff is None:
+        why = f"voice staff '{below.label}' below: a vocal lead with no voice"
+        return _vocal_candidate(context, phrase, text, None, None, VOICE_STAFF_CUE, why)
     if staff[0] == "backing":
         return _DROPPED
-    return _vocal_candidate(context, phrase, text, staff[1], None, False)
+    return _vocal_candidate(
+        context, phrase, text, staff[1], None, VOICE_FROM_STAFF, "voice taken from the Voice Lead staff below"
+    )
 
 
 def collect_candidates(
@@ -363,7 +379,7 @@ def _is_reminder_of(c: Candidate, group: list[Candidate]) -> bool:
     it is on the same or the next system, in the first bar of a later row,
     on no other chair (on a later system), and no more than a row of bars on."""
     last = group[-1]
-    if c.system_index - last.system_index > 1:
+    if c.neighbour_index - last.neighbour_index > 1:
         return False
     if c.row != last.row and not c.opens_row:
         return False
