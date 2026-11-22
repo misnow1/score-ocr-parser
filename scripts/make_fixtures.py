@@ -650,6 +650,32 @@ def absent_instrument_solo(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def folded_solos(music_font: Path, out: Path) -> None:
+    """Copies of one marking across the staves of one system. Page 1: a generic
+    "Instrumental Solo" over five of six staves (an open solo, no instrument);
+    a bare "SOLO" over a Piano staff and two staves of unusable labels (one
+    Piano solo). Page 2: "GUITAR SOLO" over every staff (a Guitar solo)."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Folded Tune", fontname="helv", fontsize=24)
+    full = FULL + ["Piano"]
+    _system(p1, 150, full, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7),
+        *[(300, ys_at(150, i) - 12, "Instrumental Solo", 9) for i in range(5)],
+    ])
+    _system(p1, 400, ["Gtr.", "Pno.", "Vocal cue", "Vocal cue"], music_font, [
+        (150, 370, "17", 7),
+        *[(300, ys_at(400, i) - 12, "SOLO", 9) for i in (1, 2, 3)],
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    p2.insert_text((200, 60), "Synthetic Folded Tune", fontname="helv", fontsize=24)
+    _system(p2, 150, ["Gtr.", "Pno.", "Dr.", "A. Sx. 1"], music_font, [
+        (150, 120, "25", 7),
+        *[(300, ys_at(150, i) - 12, "GUITAR SOLO", 9) for i in range(4)],
+    ])
+    doc.save(out)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
@@ -712,6 +738,7 @@ def main() -> None:
         distinct_solos(font, OUT / "finale_distinct_solos.pdf")
         shared_solos(font, OUT / "finale_shared_solos.pdf")
         absent_instrument_solo(font, OUT / "finale_absent_instrument_solo.pdf")
+        folded_solos(font, OUT / "finale_folded_solos.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")
