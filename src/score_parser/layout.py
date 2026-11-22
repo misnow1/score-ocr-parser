@@ -29,11 +29,13 @@ MIN_HEADER_PAGES = 2
 MIN_EXTRA_COLUMN = 3  # labels needed to accept a second column on a page
 
 _TIME_SIGNATURE = re.compile(r"^(?:\d{1,2}/\d{1,2}|(?:[2-9]|1[0-2])[248])$")
-_CHORD = re.compile(
-    r"^[A-G][#b♭♯]?(?:maj|min|dim|aug|sus|add|m|M|\+|°|ø)?\d*(?:[#b♭♯(]\d+\)?)*(?:/[A-G][#b♭♯]?)?$"
+_CHORD_BODY = (
+    r"[A-G][#b♭♯]?(?:maj|min|dim|aug|sus|add|m|M|\+|°|ø)?\d*(?:[#b♭♯]\d+|\([#b♭♯]?\d+\)?)*(?:/[A-G][#b♭♯]?)?"
 )
+_CHORD = re.compile(rf"^{_CHORD_BODY}$")
 _DOTS = re.compile(r"\.{3,}|…")
 _BARE_ROOT = re.compile(r"^[A-G][#b♭♯]?$")
+_BARE_RUN = re.compile(r"^(?:[A-G][#b♭♯]?)+$")
 _CONNECTORS = frozenset({"&", "-", "–", ",", "+"})  # between chairs: "1 & 2"
 _CHAIR_LETTERS = frozenset("iIvVxX")  # roman numeral chairs
 
@@ -162,6 +164,19 @@ def _label_prefix(row: list[Token]) -> list[Token]:
             break
         label.append(tok)
     return label
+
+
+def strip_chord_run(text: str) -> str:
+    """The word without chord symbols glued to it: "F#min7(b5)/EE9" (two chords
+    run together) -> "", "E9Solo" -> "Solo". Anything left must start a
+    capitalised word; a run of bare roots ("BEAD") is not chord text."""
+    for end in range(len(text), 0, -1):
+        head, rest = text[:end], text[end:]
+        if rest and not (rest[0].isupper() and rest.isalpha() and len(rest) > 1):
+            continue
+        if re.fullmatch(rf"(?:{_CHORD_BODY})+", head) and not _BARE_RUN.match(head):
+            return rest
+    return text
 
 
 def is_chord_symbol(text: str) -> bool:

@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal, NamedTuple
 
-from .layout import is_chord_symbol, running_headers
+from .layout import is_chord_symbol, running_headers, strip_chord_run
 from .instruments import Roster, resolve, resolve_against_first_system
 from .models import Feature, FeatureKind, Location, Page, Participant, Voice
 from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
@@ -86,7 +86,8 @@ def _absent_instrument(prefix: str) -> str | None:
 
 def strip_chords(text: str) -> str:
     """The phrase without chord symbols ("F6 TENOR SOLO" -> "TENOR SOLO")."""
-    return " ".join(w for w in text.split() if not is_chord_symbol(w))
+    words = (strip_chord_run(w) for w in text.split() if not is_chord_symbol(w))
+    return " ".join(w for w in words if w)
 
 
 def _match(text: str) -> tuple[FeatureKind, str] | None:
@@ -335,6 +336,8 @@ def collect_candidates(
     for index, system in enumerate(systems):
         for phrase in system.texts:
             text = strip_chords(phrase.text)
+            if text != phrase.text and _match(text) == ("solo", ""):
+                continue  # chord text over a bare "Solo": a chart label, not a feature
             context = SystemContext(systems, index, roster)
             vocal = _vocal_wording(context, phrase, text, roster)
             if vocal is _DROPPED:

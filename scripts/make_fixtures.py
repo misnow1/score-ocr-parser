@@ -229,6 +229,28 @@ def repeated_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def chord_text_solos(music_font: Path, out: Path) -> None:
+    """Chord symbols beside and glued to solo wording: glued chords on a bare
+    "Solo" over a guitar staff (not a feature), a chord glued to a named solo,
+    chords beside a named solo, and chord text alone."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Chord Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, ["Alto Saxophone", "Trombone", "Guitar"], music_font, [
+        (150, 120, "1", 7), (400, 120, "9", 7),
+        (200, ys_at(150, 2) - 12, "F#min7(b5)/EE9 Solo", 9),
+        (320, ys_at(150, 1) - 12, "E9 Dm7 TBN SOLO", 9),
+        (450, ys_at(150, 0) - 12, "F#min7(b5)/EE9 ALTO SOLO", 9),
+        (250, ys_at(150, 0) - 12, "G7C", 9),
+    ])
+    _system(p1, 400, ["Alto Saxophone", "Trombone", "Guitar"], music_font, [
+        (150, 370, "17", 7),
+        (200, ys_at(400, 2) - 12, "E9Solo", 9),
+        (320, ys_at(400, 1) - 12, "A7TBN SOLO", 9),
+    ])
+    doc.save(out)
+
+
 CHAIR_FULL = ["Alto Saxophone", "Trumpet in Bb 3", "Guitar 1", "Guitar 2"]
 CHAIR_ABBR = ["A. Sx.", "B Tpt. 3", "Gtrs."]
 
@@ -697,6 +719,7 @@ def main() -> None:
             OUT / "sibelius_bass_variant.pdf",
         )
         finale_solos(font, OUT / "finale_solos.pdf")
+        chord_text_solos(font, OUT / "finale_chord_text_solos.pdf")
         right_aligned(font, OUT / "finale_right_aligned.pdf")
         repeated_solos(font, OUT / "finale_repeated_solos.pdf")
         label_repair_missing(font, OUT / "label_repair_missing.pdf")
