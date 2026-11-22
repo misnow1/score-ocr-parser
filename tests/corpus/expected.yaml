@@ -154,8 +154,8 @@ scores:
       - Drums
     # One feature: a group of solos over bars 45-77 inside a repeat (slashes on every staff but the organ
     # and drums; bar 77 is marked "lead only"). Who plays is not clear, so no instrument is asserted
-    # beyond the Guitar, whose part shows it. The tool reports three features (a "(SOLOS)" marking twice
-    # and a guitar solo built from chord text) and no bars; lower the cap to 1 when copies merge.
+    # beyond the Guitar, whose part shows it. The tool reports three features: the "(SOLOS)" marking twice
+    # (p2, bar 45) and a guitar solo built from chord text (p4, bar 93); lower the cap to 1 when copies merge.
     max_features: 3
     features:
-      - {instrument: Guitar, bar: 45, xfail: "no bar numbers are read on this score; the marking is reported on p2 and p4 with bar None"}
+      - {instrument: Guitar, bar: 45}
