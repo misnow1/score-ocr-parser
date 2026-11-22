@@ -6,7 +6,7 @@ the next systems and pages), `build_feature` turns each group into one Feature.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, NamedTuple
 
 from .layout import count_chords, is_chord_symbol, running_headers, strip_chord_run
@@ -145,6 +145,9 @@ class Candidate:
     chair_ambiguous: bool = False  # the staff is shared by several chairs
     voice: Voice | None = None  # vocal leads only
     section: str | None = None  # vocal leads only
+    slot: int = -1  # position of the staff below the text in its system
+    staff_count: int = 0  # staves in that system
+    named: bool = False  # the instrument comes from the marking text
     voice_system_index: int | None = None  # vocal leads only: position among the systems that have voice staves
 
     @property
@@ -273,6 +276,9 @@ def _candidate(
         chair=chair,
         chair_from=chair_from,
         chair_ambiguous=ambiguous,
+        slot=next((i for i, s in enumerate(system.staves) if s is staff), -1),
+        staff_count=len(system.staves),
+        named=bool(named and not named[1]),
     )
 
 
@@ -378,6 +384,7 @@ def collect_candidates(
     return candidates, list(warnings)
 
 
+SHARED_X_TOLERANCE = 3.0  # pt: markings this close are printed at the same place
 MAX_REMINDER_GAP = 16  # bars: a reminder sits on the next system, one row of bars on
 
 
@@ -401,6 +408,92 @@ def _is_reminder_of(c: Candidate, group: list[Candidate]) -> bool:
     return c.bar is None or last.bar is None or abs(c.bar - last.bar) <= MAX_REMINDER_GAP
 
 
+MIN_OPEN_COPIES = 4  # copies of one marking on one system that make it a marking over every staff
+_STAFF_REASONS = ("instrument taken", "chair", "staff '", "possible feature", "named instrument")
+
+
+def _open_copy(c: Candidate, text: str) -> Candidate:
+    """The copy of a generic marking with no instrument: the staff it sits
+    above is not the soloist's. `text` is the marking's wording."""
+    reasons = [r for r in c.reasons if not r.startswith(_STAFF_REASONS)]
+    reasons.append("generic marking printed over every staff: an open solo, instrument unknown")
+    return replace(
+        c, text=text, instrument=None, staff="", chair=None, chair_from=None, chair_ambiguous=False,
+        evidence=BASE, reasons=reasons,
+    )
+
+
+def _folded(c: Candidate, lead: Candidate) -> Candidate:
+    """A copy with no instrument joins the copy of the same marking that has one."""
+    reasons = c.reasons + [f"copy of the {lead.instrument} marking on another staff"]
+    return replace(c, instrument=lead.instrument, staff="", reasons=reasons)
+
+
+def fold_copies(candidates: list[Candidate]) -> list[Candidate]:
+    """Copies of one marking across the staves of one system, whether or not
+    they name an instrument. A generic wording (no instrument in its text) on
+    more than half of the staves is an open solo: every copy loses its staff's
+    instrument. Otherwise copies with no instrument join a copy that has one,
+    at the same place."""
+    wide: dict[tuple[int, int, str], list[int]] = {}
+    for i, c in enumerate(candidates):
+        if c.kind != "vocal lead":
+            wide.setdefault((c.page, c.system_index, c.text.lower()), []).append(i)
+    out = list(candidates)
+    open_systems: dict[tuple[int, int], list[Candidate]] = {}
+    for members in wide.values():
+        copies = [candidates[i] for i in members]
+        slots = {c.slot for c in copies}
+        if (
+            not any(c.named for c in copies)
+            and len(slots) >= MIN_OPEN_COPIES
+            and len(slots) * 2 > copies[0].staff_count
+        ):
+            for i in members:
+                out[i] = _open_copy(candidates[i], copies[0].text)
+            open_systems.setdefault((copies[0].page, copies[0].system_index), []).append(out[members[0]])
+            continue
+        for i in members:
+            c = candidates[i]
+            lead = next(
+                (
+                    o for o in copies
+                    if o.instrument and abs(o.x - c.x) <= SHARED_X_TOLERANCE
+                ),
+                None,
+            )
+            if c.instrument is None and lead:
+                out[i] = _folded(c, lead)
+    dropped: set[int] = set()
+    for i, c in enumerate(out):
+        for open_copy in open_systems.get((c.page, c.system_index), []):
+            if c.kind == "vocal lead" and c.text.lower() == open_copy.text.lower():
+                dropped.add(i)  # the copy over a voice staff is the same open marking
+                continue
+            if c.kind != "vocal lead" and not c.named and c.instrument and _near(c, open_copy):
+                out[i] = _open_copy(c, open_copy.text)
+    return [c for i, c in enumerate(out) if i not in dropped]
+
+
+def _near(c: Candidate, other: Candidate) -> bool:
+    return c.bar is None or other.bar is None or abs(c.bar - other.bar) <= MAX_REMINDER_GAP
+
+
+def _restated(c: Candidate, latest: dict[MergeKey, list[Candidate]]) -> list[Candidate] | None:
+    """The group an instrument-less copy restates: the same wording at the same
+    place on a later system, over a staff that names no instrument."""
+    return next(
+        (
+            g for g in latest.values()
+            if g[-1].text.lower() == c.text.lower()
+            and g[-1].kind == c.kind
+            and abs(g[-1].x - c.x) <= SHARED_X_TOLERANCE
+            and _is_reminder_of(c, g)
+        ),
+        None,
+    )
+
+
 def merge_candidates(candidates: list[Candidate]) -> list[list[Candidate]]:
     """Groups of copies, in reading order. A candidate joins the group with its
     key when it is a reminder of it (see `_is_reminder_of`): a copy on another
@@ -410,6 +503,8 @@ def merge_candidates(candidates: list[Candidate]) -> list[list[Candidate]]:
     latest: dict[MergeKey, list[Candidate]] = {}
     for c in candidates:
         group = latest.get(c.key)
+        if group is None and c.instrument is None and c.kind != "vocal lead":
+            group = _restated(c, latest)
         if group is None or not _is_reminder_of(c, group):
             group = latest[c.key] = []
             groups.append(group)
@@ -440,9 +535,6 @@ def _group_chair(group: list[Candidate]) -> tuple[int | None, bool]:
             return chairs.pop(), False
         return None, True
     return None, any(c.chair_ambiguous for c in group)
-
-
-SHARED_X_TOLERANCE = 3.0  # pt: markings this close are printed at the same place
 
 
 def _coincide(a: list[Candidate], b: list[Candidate]) -> bool:
@@ -529,5 +621,5 @@ def find_features(
     drop_out_of_sequence(systems)
     count_bars(systems)
     candidates, warnings = collect_candidates(systems, roster)
-    sets = join_shared(merge_candidates(candidates))
+    sets = join_shared(merge_candidates(fold_copies(candidates)))
     return [build_feature(s[0], s[1:]) for s in sets], warnings
