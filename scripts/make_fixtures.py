@@ -288,6 +288,10 @@ def distinct_solos(music_font: Path, out: Path) -> None:
     p3 = doc.new_page(width=612, height=792)
     _system(p3, 150, gtrs, music_font, [
         (150, 120, "65", 7), (200, ys_at(150, 2) - 12, "SOLO", 9),
+    ])
+    doc.save(out)
+
+
 SHARED_FULL = ["Soprano Saxophone", "Alto Saxophone", "Clarinet in Bb", "Trumpet in Bb 3"]
 SHARED_ABBR = ["S. Sx.", "A. Sx.", "Cl.", "B Tpt. 3"]
 
