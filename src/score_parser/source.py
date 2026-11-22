@@ -1,6 +1,7 @@
 """Source stage: PDF pages to Pages of Tokens, from the text layer or by OCR."""
 
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import pymupdf
@@ -52,8 +53,9 @@ def classify_page(pg: pymupdf.Page) -> PageReason:
 
     "text": it has a text layer. With almost no text words it is instead "image"
     (a page-sized embedded image), "pattern" (a tiling-pattern fill, which image
-    detection cannot see) or "empty" (nothing readable). Anything but "text" is
-    rendered and sent to OCR.
+    detection cannot see) or "empty" (no text at all). A page with a few words
+    and no scan keeps its text layer. Anything but "text" is rendered and sent
+    to OCR.
     """
     if len(pg.get_text("words")) > MAX_TEXT_WORDS:
         return "text"
@@ -62,13 +64,14 @@ def classify_page(pg: pymupdf.Page) -> PageReason:
         return "image"
     if b"/Pattern" in pg.read_contents():
         return "pattern"
-    return "empty"
+    return "text" if pg.get_text("words") else "empty"
 
 
 def scan_warnings(page: Page) -> list[str]:
     out = []
     if not page.tokens:
-        out.append(f"page {page.number}: no text found ({page.reason}, read by {page.source})")
+        unavailable = "; OCR unavailable" if page.source == "text" and page.reason != "text" else ""
+        out.append(f"page {page.number}: no text found ({page.reason}, read by {page.source}{unavailable})")
     if page.dpi is not None and page.dpi < MIN_USEFUL_DPI:
         out.append(f"page {page.number}: low resolution ({page.dpi:.0f} dpi), results unreliable")
     if page.ocr_confidence is not None and page.ocr_confidence < MIN_CONFIDENCE:
@@ -132,7 +135,12 @@ def _ocr_page(
     reason: PageReason,
     score_orientation: OrientationScorer,
 ) -> Page:
-    from .ocr import recognise  # macOS-only; imported lazily
+    try:
+        from .ocr import recognise  # macOS-only; imported lazily
+
+        import Vision  # noqa: F401
+    except ImportError:
+        return replace(_text_page(pg, number), reason=reason)  # no OCR here: keep the text layer
 
     if reason in ("pattern", "empty") or image is None:  # no usable image: render the page
         rect, dpi = pg.rect, float(TARGET_DPI)

@@ -68,7 +68,7 @@ def _feature_problem(report, want: dict) -> str | None:
 
 
 def _absent_problem(report, want: dict) -> str | None:
-    hits = [f for f in report.features if _name_of(f) == want["instrument"] and _located(f, want)]
+    hits = [f for f in report.features if want["instrument"] in _names_of(f) and _located(f, want)]
     if not hits:
         return None
     return f"unexpected {want['instrument']} feature at page {hits[0].page} bar {hits[0].bar}"
@@ -209,7 +209,7 @@ def test_expected_facts_file_loads_and_each_entry_is_well_formed():
 
 @needs_corpus
 def test_every_corpus_score_parses_without_crashing():
-    pdfs = sorted(Path(CORPUS_DIR).glob("*.pdf"))
+    pdfs = sorted(p for p in Path(CORPUS_DIR).iterdir() if p.suffix.lower() == ".pdf")
     assert pdfs, f"no PDFs in {CORPUS_DIR}"
     for pdf in pdfs:
         parse_score(pdf)

@@ -29,7 +29,7 @@ def _is_private_use(ch: str) -> bool:
     return 0xE000 <= cp <= 0xF8FF or 0xF0000 <= cp <= 0x10FFFF
 
 
-_GLUED = re.compile(r"^(\d{1,3})([A-Z]{2}.*)$")
+_GLUED = re.compile(r"^(\d{1,3})(?!(?:ST|ND|RD|TH)$)([A-Z]{2}.*)$")
 
 
 def _split_glued(tok: Token) -> list[Token]:
@@ -44,7 +44,10 @@ def _split_glued(tok: Token) -> list[Token]:
 
 def is_music(tok: Token) -> bool:
     """Whether a token is a music-font glyph: set in a listed music font, or
-    (font unknown) made only of glyph characters."""
+    (text-layer font unknown) made only of glyph characters. OCR tokens have no
+    font and are real text: "&" or "ã" there are not music."""
+    if tok.source == "ocr":
+        return False
     font = tok.font.lower()
     if not font:
         glyphs = _music_glyphs()
