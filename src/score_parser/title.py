@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 
+from .instruments import resolve
 from .layout import lines
 from .models import Page
 
@@ -17,8 +18,19 @@ _NOISE_WORDS = re.compile(
 _LARGE = 0.85  # a token this fraction of the tallest counts as "large text"
 
 
+_TRAILING_PART = re.compile(r"\s[-–]\s*([^-–]+)$")
+
+
+def _drop_part_word(text: str) -> str:
+    """Drop a trailing " - Piano" style part name (only after a dash)."""
+    match = _TRAILING_PART.search(text)
+    if match and resolve(match.group(1).strip()):
+        return text[: match.start()]
+    return text
+
+
 def clean_filename(stem: str) -> str:
-    text = stem.replace("_", " ")
+    text = _drop_part_word(stem.replace("_", " "))
     for pattern in (_PARENS_COPY, _DATE, _YEAR, _NOISE_WORDS):
         text = pattern.sub(" ", text)
     text = re.sub(r"[\s\-–,]+", " ", text).strip(" -–.")

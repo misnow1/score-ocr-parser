@@ -47,7 +47,7 @@ Current scope: text-layer PDFs and scans. The report lists the instruments on th
 - chairs, expanded from ranges ("1-4", "1–4", "Tbn.1-4", "i & II");
 - combined labels: "Trb. 3, Tba." gives Trombone chair 3 and Tuba chair 1. Each part must resolve, or the whole label is unrecognised; each part is then cross-checked like a single label (see the later-system rule below);
 - doublings, from labels ("Flute (Oboe) 1-3") and from instruction text ("to Flute", "piccolo trpt"; a "Mute" marking is ignored). An instruction is attached to the staff label nearest to it vertically;
-- non-standard instruments (violin, viola, cello, organ, guitars, french horn, tuba, percussion, synthesizer, sleigh bells, lead vocal, flugelhorn, piccolo trumpet, and others in the alias table).
+- non-standard instruments (violin, viola, cello, organ, guitars, french horn, tuba, percussion, synthesizer, sleigh bells, wood block ("W BL", "W. Bl."), cowbell ("C BL", "C. Bl."), lead vocal, flugelhorn, piccolo trumpet, and others in the alias table).
 
 Staff labels are found as a column at the left of the staves. Notation programs right-align them (short names such as "Piano" or "Picc." start further right), so the column is found from labels sharing a right edge, or a left edge for left-aligned scores, whichever lines up more labels. Each line is cut to its label at the first gap of 8 pt or more, glyph residue, chord symbol ("Pno. D D A7") or time signature ("Baritone Saxophone 44": the 44 is never read as a chair). Running titles (a long line repeating on several pages), score and group tags ("Score 5", "Trumpets"), credit and footer lines, lone chords and dynamics, and one- or two-letter glyph residue are not labels (`data/label_filters.yaml`). The first system is the stack with the most resolving labels on the first page that has any, not simply the topmost stack.
 
@@ -59,7 +59,7 @@ Solo and feature detection: `report.features` lists every solo or feature markin
 
 Flow draft (`--format yaml`, or `report.flow`): a `flow:` block in the shape mic-assignment-planner uses in `numbers/*.yaml`. One step per feature, each with `section` ("Alto Sax solo (B)"), `instrument` (lower case) and a `note` giving page, bar, rehearsal mark and confidence. Steps below 0.8 confidence, or with no instrument, are followed by a `# TODO(score-parser)` comment giving the reasons. The draft never contains `kind` (vocal or instrumental) or `position` (DS1-DS5); those stay with the planner.
 
-Title: the filename with noise removed ("SCORE", dates, years, "AJC", "copy", "(1)" and similar); if nothing is left, the largest text on page 1. `report.title_source` says which (`filename` or `page 1`).
+Title: the filename with noise removed ("SCORE", dates, years, "AJC", "copy", "(1)" and similar) and a trailing part name after a dash ("ERGUE A CASA - Piano" gives "ERGUE A CASA"; only a dash-separated instrument name is dropped, so "Piano Man" is kept); if nothing is left, the largest text on page 1. `report.title_source` says which (`filename` or `page 1`).
 
 `--numbers-dir DIR` (or `ParseOptions(numbers_dir=...)`) points at the planner's `numbers/` folder, which is only read. The title is fuzzy-matched (rapidfuzz) against the slugs, each file's `title:` and the known aliases in `data/title_aliases.yaml` (First Noel = First Nowell, Superstition = Super Christmas). A match names the draft `<slug>.yaml` (`report.matched_slug`). With no match the draft is named `UNMATCHED-<title-slug>.yaml` and starts with an `UNMATCHED` comment. Without `--numbers-dir` the draft is named for the title slug. `parse` refuses an output directory inside the numbers directory, so it never writes into the planner repo.
 
@@ -73,20 +73,36 @@ Folder runs: `parse` accepts folders (every `*.pdf` in them, any letter case) an
 SCORE_CORPUS_DIR=/path/to/scores uv run pytest tests/corpus
 ```
 
-The scores are read in place; nothing is copied or written. One test checks that every PDF in the folder parses. The others compare each score with the approved facts in `tests/corpus/expected.yaml`. That file ships as an empty placeholder. To add facts, first get the user's approval for each one, then add an entry keyed by the PDF file name without `.pdf`:
+The scores are read in place; nothing is copied or written. One test checks that every PDF in the folder parses. The others compare each score with the approved facts in `tests/corpus/expected.yaml`. Pages and bars match exactly (no tolerance), so a bar one off fails.
+
+To add facts, first get the user's approval for each one, then add an entry keyed by the PDF file name without `.pdf`:
 
 ```yaml
 scores:
   some-score-file-stem:
-    instruments: [Alto Sax, Drums]   # canonical names that must be present
-    features:                         # a feature for this instrument within `tolerance` bars of `bar`
-      - {instrument: Alto Sax, bar: 29, tolerance: 4}
+    instruments: [Alto Sax, {name: Wood Block, xfail: "why the tool misses it"}]
+    max_features: 13                  # at most this many features in the report
+    features:
+      - {instrument: Alto Sax, page: 5, bar: 29}
+      - {instrument: Guitar, chair: 2, page: 24, bar: 143}
+      - {instruments: [Clarinet, Trumpet], kind: shared, page: 1, bar: 9, mark: A}
+      - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "vocal lead not recognised"}
+    not_features:                     # false positives that must not appear
+      - {instrument: Baritone Sax, page: 5}
 ```
 
-Facts stay short and hold no music content: instrument names and approximate bar numbers only.
+- Feature keys, all optional except the instrument: `page`, `bar` and `mark` (rehearsal mark) match exactly; `chair` (the feature must carry that chair; the tool does not report one yet, so such facts are marked `xfail`); `kind` is `instrument`, `vocal` (instrument `Vocal`) or `shared`; `instruments` lists several instruments that must each have a feature at the same page, bar and mark (use it with `kind: shared`).
+- `xfail: reason` records a fact the tool does not meet yet. It must keep failing: once it passes, the test fails and asks you to remove the `xfail`.
+- `not_features` lists instrument features that must not be found (given `page`, `bar` or `mark` to narrow them down).
+
+Facts stay short and hold no music content: instrument names, page, bar and marker only.
+
+`scripts/corpus_counts.py [DIR]` (default `$SCORE_CORPUS_DIR`) prints per-score counts to stdout: instruments, features, features with no bar, features with no instrument and warnings, so two runs can be compared. Rows are numbered by sorted position; `--names` adds the file names. It prints numbers only and writes nothing.
 
 ## Licensing
 
 Scores are unlicensed copies. Never copy, render, commit or store scores or excerpts. `.gitignore` excludes PDFs, images and `out/`; only the synthetic fixtures in `tests/fixtures/synthetic/` are committed. Regenerate them with `uv run python scripts/make_fixtures.py`.
 
 See `docs/adr/` for decisions and `GLOSSARY.md` for terms.
+
+Open question (Jingle Bells): the left-margin words "Bls." (once per page, at the bottom of the page, from p2) and "HEY!" (beside most staves on p4, p9, p15, p20 and p28) are not in the alias table. "HEY!" is a shouted cue, not a staff label. "Bls." may be a bells staff (Sleigh Bells would be "S. Bells"), but that is unconfirmed, so it stays unrecognised until the planner decides.

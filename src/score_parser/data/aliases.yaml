@@ -94,3 +94,9 @@ instruments:
   - name: Sleigh Bells
     family: Rhythm
     aliases: [sleigh bells, sleigh bell, s bells]
+  - name: Wood Block
+    family: Rhythm
+    aliases: [wood block, woodblock, wood blocks, w bl, w bls, w blk]
+  - name: Cowbell
+    family: Rhythm
+    aliases: [cowbell, cow bell, cowbells, c bl, c bls, c bell]
