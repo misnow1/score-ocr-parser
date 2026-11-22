@@ -14,7 +14,7 @@
 #       - {instruments: [Clarinet, Trumpet], kind: shared, page: 1, bar: 9, mark: A}
 #       - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "known gap"}
 #     not_features:
-#       - {instrument: Baritone Sax, page: 5, xfail: "false positive today"}
+#       - {instrument: Baritone Sax, page: 5}
 #
 # `xfail: reason` marks a fact the tool does not meet yet. It must keep
 # failing; once it passes, the suite says to remove the xfail.
@@ -55,9 +55,9 @@ scores:
       - {instrument: Guitar, chair: 1, page: 26, bar: 151, xfail: "the tool reports no chair for a feature"}
       - {instrument: Guitar, chair: 2, page: 28, bar: 164, xfail: "the tool reports no chair for a feature"}
     not_features:
-      - {instrument: Baritone Sax, page: 5, xfail: "false positive today"}
-      - {instrument: Trombone, page: 13, xfail: "false positive today"}
-      - {instrument: Baritone Sax, page: 16, xfail: "false positive today"}
+      - {instrument: Baritone Sax, page: 5}
+      - {instrument: Trombone, page: 13}
+      - {instrument: Baritone Sax, page: 16}
 
   "Winter Wonderland JC2026 SCORE NOT FINAL":
     instruments: [Soprano Sax, Clarinet, Trumpet]

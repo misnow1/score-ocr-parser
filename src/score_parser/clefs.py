@@ -11,6 +11,7 @@ from statistics import median
 from .models import Page, Token
 
 X_TOLERANCE = 3.0  # clefs of one column share an x to within this
+START_WINDOW = 40.0  # the clef column is among the first glyphs right of the labels
 SAME_STAFF = 3.0  # glyphs this close vertically are one staff
 MIN_STAVES = 2
 COVER_FACTOR = 0.6  # a clef within this many label gaps of a label belongs to it
@@ -21,8 +22,13 @@ def clef_ys(page: Page, label_right: float) -> list[float]:
     """Vertical centres of the clefs right of the label column, top to bottom;
     empty when the page has no usable clef column."""
     glyphs = [g for g in page.glyphs if g.x0 > label_right]
+    if not glyphs:
+        return []
+    reach = min(g.x0 for g in glyphs) + START_WINDOW  # brackets, clefs, then notes
     best: list[Token] = []
     for anchor in sorted(glyphs, key=lambda g: g.x0):
+        if anchor.x0 > reach:
+            break
         group = [g for g in glyphs if abs(g.x0 - anchor.x0) <= X_TOLERANCE]
         if len(group) > len(best):
             best = group
