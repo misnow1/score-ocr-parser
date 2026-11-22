@@ -73,17 +73,31 @@ Folder runs: `parse` accepts folders (every `*.pdf` in them, any letter case) an
 SCORE_CORPUS_DIR=/path/to/scores uv run pytest tests/corpus
 ```
 
-The scores are read in place; nothing is copied or written. One test checks that every PDF in the folder parses. The others compare each score with the approved facts in `tests/corpus/expected.yaml`. That file ships as an empty placeholder. To add facts, first get the user's approval for each one, then add an entry keyed by the PDF file name without `.pdf`:
+The scores are read in place; nothing is copied or written. One test checks that every PDF in the folder parses. The others compare each score with the approved facts in `tests/corpus/expected.yaml`. Pages and bars match exactly (no tolerance), so a bar one off fails.
+
+To add facts, first get the user's approval for each one, then add an entry keyed by the PDF file name without `.pdf`:
 
 ```yaml
 scores:
   some-score-file-stem:
-    instruments: [Alto Sax, Drums]   # canonical names that must be present
-    features:                         # a feature for this instrument within `tolerance` bars of `bar`
-      - {instrument: Alto Sax, bar: 29, tolerance: 4}
+    instruments: [Alto Sax, {name: Wood Block, xfail: "why the tool misses it"}]
+    max_features: 13                  # at most this many features in the report
+    features:
+      - {instrument: Alto Sax, page: 5, bar: 29}
+      - {instrument: Guitar, chair: 2, page: 24, bar: 143}
+      - {instruments: [Clarinet, Trumpet], kind: shared, page: 1, bar: 9, mark: A}
+      - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "vocal lead not recognised"}
+    not_features:                     # false positives that must not appear
+      - {instrument: Baritone Sax, page: 5}
 ```
 
-Facts stay short and hold no music content: instrument names and approximate bar numbers only.
+- Feature keys, all optional except the instrument: `page`, `bar` and `mark` (rehearsal mark) match exactly; `chair` (the feature must carry that chair; the tool does not report one yet, so such facts are marked `xfail`); `kind` is `instrument`, `vocal` (instrument `Vocal`) or `shared`; `instruments` lists several instruments that must each have a feature at the same page, bar and mark (use it with `kind: shared`).
+- `xfail: reason` records a fact the tool does not meet yet. It must keep failing: once it passes, the test fails and asks you to remove the `xfail`.
+- `not_features` lists instrument features that must not be found (given `page`, `bar` or `mark` to narrow them down).
+
+Facts stay short and hold no music content: instrument names, page, bar and marker only.
+
+`scripts/corpus_counts.py [DIR]` (default `$SCORE_CORPUS_DIR`) prints per-score counts to stdout: instruments, features, features with no bar, features with no instrument and warnings, so two runs can be compared. Rows are numbered by sorted position; `--names` adds the file names. It prints numbers only and writes nothing.
 
 ## Licensing
 

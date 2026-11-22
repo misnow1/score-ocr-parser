@@ -1,14 +1,81 @@
-# PLACEHOLDER: approved facts for the real local score corpus.
+# Approved facts for the real local score corpus (opt-in, never run in CI).
 #
-# This file is intentionally empty of facts. Add an entry only after the
-# user has approved it by hand. Facts are short and contain no music content:
-# instrument names and approximate bar numbers, nothing else.
-#
-# Shape (keys are PDF file stems; see README.md, "Corpus tests"):
+# Facts are hand-written statements checked by the user against the PDFs.
+# They hold no music content: instrument names, page, bar and marker only.
+# Add an entry only after the user has approved it. Pages and bars match
+# exactly. See README.md, "Corpus tests", for every key.
 #
 # scores:
 #   <pdf file name without .pdf>:
-#     instruments: [Alto Sax, Drums]      # canonical names that must be present
-#     features:                            # solos/features that must be found
-#       - {instrument: Alto Sax, bar: 29, tolerance: 4}
-scores: {}
+#     instruments: [Alto Sax, {name: Wood Block, xfail: "why the tool misses it"}]
+#     max_features: 13
+#     features:
+#       - {instrument: Alto Sax, page: 5, bar: 29}
+#       - {instruments: [Clarinet, Trumpet], kind: shared, page: 1, bar: 9, mark: A}
+#       - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "known gap"}
+#     not_features:
+#       - {instrument: Baritone Sax, page: 5, xfail: "false positive today"}
+#
+# `xfail: reason` marks a fact the tool does not meet yet. It must keep
+# failing; once it passes, the suite says to remove the xfail.
+scores:
+  "JINGLE BELLS AJC 2026 - Score":
+    instruments:
+      - Piccolo
+      - Alto Sax
+      - Tenor Sax
+      - Baritone Sax
+      - Trumpet
+      - Trombone
+      - Violin
+      - Viola
+      - Piano
+      - Guitar
+      - Electric Bass
+      - Drums
+      - {name: Wood Block, xfail: "percussion line that only appears from p10 is not in the instrumentation"}
+    # Thirteen verified features; the Bass Guitar "Solo" on p1 mm1-5 is ambiguous, so one extra is allowed.
+    max_features: 14
+    features:
+      - {instrument: Alto Sax, page: 5, bar: 29}
+      - {instrument: Trombone, page: 8, bar: 44, xfail: "reported at bar 45"}
+      - {instrument: Baritone Sax, page: 9, bar: 49, xfail: "not found"}
+      - {instrument: Trombone, page: 9, bar: 52, xfail: "not found"}
+      - {instrument: Baritone Sax, page: 10, bar: 57, xfail: "reported at bar 10"}
+      - {instrument: Piano, page: 11, bar: 61}
+      - {instrument: Trumpet, page: 13, bar: 77}
+      - {instrument: Tenor Sax, page: 16, bar: 94}
+      - {instrument: Violin, page: 19, bar: 110}
+      - {instrument: Guitar, page: 23, bar: 135}
+      - {instrument: Guitar, page: 24, bar: 143, xfail: "not found"}
+      - {instrument: Guitar, page: 26, bar: 151}
+      - {instrument: Guitar, page: 28, bar: 164}
+      - {instrument: Guitar, chair: 1, page: 23, bar: 135, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 2, page: 24, bar: 143, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 1, page: 26, bar: 151, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 2, page: 28, bar: 164, xfail: "the tool reports no chair for a feature"}
+    not_features:
+      - {instrument: Baritone Sax, page: 5, xfail: "false positive today"}
+      - {instrument: Trombone, page: 13, xfail: "false positive today"}
+      - {instrument: Baritone Sax, page: 16, xfail: "false positive today"}
+
+  "Winter Wonderland JC2026 SCORE NOT FINAL":
+    instruments: [Soprano Sax, Clarinet, Trumpet]
+    # One shared feature and seven vocal leads; no other instrument solos.
+    max_features: 8
+    features:
+      - {instruments: [Clarinet, Soprano Sax, Trumpet], kind: shared, page: 1, bar: 9, mark: A, xfail: "marker A is not read and the three are not reported at bar 9"}
+      # The tool reports these vocalists as no instrument and has no male/female.
+      - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "vocal lead not recognised (female, after B)"}
+      - {instrument: Vocal, kind: vocal, page: 3, mark: C, xfail: "vocal lead not recognised (male, at C)"}
+      - {instrument: Vocal, kind: vocal, mark: D, xfail: "vocal lead not recognised (female, D + 4 measures, p6-7)"}
+      - {instrument: Vocal, kind: vocal, page: 10, mark: H, xfail: "vocal leads not recognised (male at H, female at H + 4)"}
+      - {instrument: Vocal, kind: vocal, page: 15, xfail: "vocal lead not recognised (male)"}
+      - {instrument: Vocal, kind: vocal, page: 16, xfail: "vocal lead not recognised (female)"}
+
+  "ERGUE A CASA 10.22.26 - Piano":
+    instruments: [Trumpet, Alto Sax, Trombone, Organ, Guitar, Electric Bass, Drums]
+    max_features: 1
+    features:
+      - {instrument: Guitar, page: 16, bar: 62}
+      - {instrument: Guitar, chair: 1, page: 16, bar: 62, xfail: "the tool reports no chair for a feature"}

@@ -24,36 +24,164 @@ def load_expected(path: Path = EXPECTED) -> dict:
     return (yaml.safe_load(path.read_text()) or {}).get("scores") or {}
 
 
+def _kind_of(instrument: str | None) -> str:
+    return "vocal" if instrument == "Vocal" else "instrument"
+
+
+def _located(f, want: dict) -> bool:
+    """Exact match on the keys the fact gives: page, bar and rehearsal mark."""
+    return all(
+        getattr(f, attr) == want[key]
+        for key, attr in (("page", "page"), ("bar", "bar"), ("mark", "rehearsal_mark"))
+        if key in want
+    )
+
+
+def _feature_problem(report, want: dict) -> str | None:
+    names = want.get("instruments") or [want["instrument"]]
+    shared = want.get("kind") == "shared"
+    place = ", ".join(f"{k} {want[k]}" for k in ("page", "bar", "mark") if k in want) or "anywhere"
+    if shared and len(names) < 2:
+        return f"shared feature {names[0]!r} needs several instruments"
+    for name in names:
+        hits = [f for f in report.features if f.instrument == name and _located(f, want)]
+        if "chair" in want:
+            hits = [f for f in hits if getattr(f, "chair", None) == want["chair"]]
+        if "kind" in want and not shared:
+            hits = [f for f in hits if _kind_of(f.instrument) == want["kind"]]
+        if not hits:
+            chair = f" chair {want['chair']}" if "chair" in want else ""
+            return f"no {name} feature at {place}{chair}"
+    return None
+
+
+def _absent_problem(report, want: dict) -> str | None:
+    hits = [f for f in report.features if f.instrument == want["instrument"] and _located(f, want)]
+    if not hits:
+        return None
+    return f"unexpected {want['instrument']} feature at page {hits[0].page} bar {hits[0].bar}"
+
+
+def _fact_label(fact: dict) -> str:
+    name = fact.get("name") or fact.get("instrument") or " + ".join(fact.get("instruments", []))
+    return f"fact {name!r}"
+
+
+def _with_xfail(fact: dict, problem: str | None) -> list[str]:
+    """An expected-to-fail fact must keep failing; it is flagged once it passes."""
+    reason = fact.get("xfail")
+    if not reason:
+        return [problem] if problem else []
+    return [] if problem else [f"{_fact_label(fact)} now passes; remove its xfail ({reason})"]
+
+
 def check_facts(report, facts: dict) -> list[str]:
-    """Return a list of human-readable mismatches (empty when all facts hold)."""
-    problems = []
+    """Return a list of human-readable mismatches (empty when all facts hold).
+
+    Keys: instruments (names or {name, xfail}); features (exact page, bar, mark,
+    kind, chair, one `instrument` or several `instruments`; `xfail: reason`
+    marks a known gap); not_features (must be absent); max_features.
+    Bars and pages match exactly.
+    """
+    problems: list[str] = []
     have = {e.instrument for e in report.instrumentation}
-    for name in facts.get("instruments", []):
-        if name not in have:
-            problems.append(f"instrument {name!r} missing")
+    for item in facts.get("instruments", []):
+        fact = item if isinstance(item, dict) else {"name": item}
+        missing = f"instrument {fact['name']!r} missing" if fact["name"] not in have else None
+        problems += _with_xfail(fact, missing)
     for want in facts.get("features", []):
-        tol = want.get("tolerance", 0)
-        hit = any(
-            f.instrument == want["instrument"] and f.bar is not None and abs(f.bar - want["bar"]) <= tol
-            for f in report.features
-        )
-        if not hit:
-            problems.append(f"no {want['instrument']} feature within {tol} bars of {want['bar']}")
+        problems += _with_xfail(want, _feature_problem(report, want))
+    for want in facts.get("not_features", []):
+        problems += _with_xfail(want, _absent_problem(report, want))
+    cap = facts.get("max_features")
+    if cap is not None and len(report.features) > cap:
+        problems.append(f"{len(report.features)} features found, at most {cap} expected")
     return problems
 
 
-def test_facts_checker_passes_and_fails_on_a_synthetic_score():
-    report = parse_score(FIXTURES / "finale_solos.pdf")
-
-    good = {"instruments": ["Alto Sax"], "features": [{"instrument": "Alto Sax", "bar": 30, "tolerance": 2}]}
-    bad = {"instruments": ["Tuba"], "features": [{"instrument": "Alto Sax", "bar": 90, "tolerance": 2}]}
-    assert check_facts(report, good) == []
-    assert len(check_facts(report, bad)) == 2
+@pytest.fixture(scope="module")
+def solos_report():
+    return parse_score(FIXTURES / "finale_solos.pdf")
 
 
-def test_expected_facts_file_loads_as_a_mapping():
-    # Ships as an empty placeholder; approved facts are added by hand.
-    assert isinstance(load_expected(), dict)
+def feature_fact(**fact):
+    return {"features": [fact]}
+
+
+def test_facts_checker_passes_and_fails_on_a_synthetic_score(solos_report):
+    good = {"instruments": ["Alto Sax"], "features": [{"instrument": "Alto Sax", "page": 1, "bar": 29}]}
+    bad = {"instruments": ["Tuba"], "features": [{"instrument": "Alto Sax", "page": 1, "bar": 90}]}
+    assert check_facts(solos_report, good) == []
+    assert len(check_facts(solos_report, bad)) == 2
+
+
+def test_bar_is_exact_with_no_tolerance(solos_report):
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", bar=29)) == []
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", bar=30))
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", bar=28))
+
+
+def test_page_must_match_exactly(solos_report):
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", page=1, bar=29)) == []
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", page=2, bar=29))
+
+
+def test_rehearsal_mark_must_match(solos_report):
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", mark="B")) == []
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", mark="C"))
+
+
+def test_kind_distinguishes_instrument_and_vocal(solos_report):
+    assert check_facts(solos_report, feature_fact(instrument="Vocal", kind="vocal")) == []
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", kind="instrument")) == []
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", kind="vocal"))
+    assert check_facts(solos_report, feature_fact(instrument="Vocal", kind="instrument"))
+
+
+def test_shared_feature_needs_every_listed_instrument_at_the_same_place(solos_report):
+    shared = {"instruments": ["Vocal", "Drums"], "kind": "shared", "page": 2, "bar": 33}
+    assert check_facts(solos_report, {"features": [shared]}) == []
+    apart = {"instruments": ["Alto Sax", "Drums"], "kind": "shared", "page": 2, "bar": 33}
+    assert check_facts(solos_report, {"features": [apart]})
+    assert check_facts(solos_report, feature_fact(instrument="Drums", kind="shared"))
+
+
+def test_chair_fact_fails_while_the_tool_reports_no_chair(solos_report):
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", chair=1))
+
+
+def test_max_features_caps_the_feature_count(solos_report):
+    assert check_facts(solos_report, {"max_features": len(solos_report.features)}) == []
+    assert check_facts(solos_report, {"max_features": len(solos_report.features) - 1})
+
+
+def test_features_that_must_be_absent(solos_report):
+    assert check_facts(solos_report, {"not_features": [{"instrument": "Alto Sax", "page": 5}]}) == []
+    assert check_facts(solos_report, {"not_features": [{"instrument": "Alto Sax", "page": 1}]})
+
+
+def test_expected_to_fail_fact_is_tolerated_until_it_starts_passing(solos_report):
+    wrong = feature_fact(instrument="Alto Sax", bar=44, xfail="known wrong bar")
+    assert check_facts(solos_report, wrong) == []
+    right = feature_fact(instrument="Alto Sax", bar=29, xfail="stale reason")
+    problems = check_facts(solos_report, right)
+    assert len(problems) == 1 and "now passes" in problems[0]
+
+
+def test_expected_to_fail_applies_to_instruments_and_absent_features(solos_report):
+    assert check_facts(solos_report, {"instruments": [{"name": "Tuba", "xfail": "not found yet"}]}) == []
+    gone = {"not_features": [{"instrument": "Alto Sax", "page": 1, "xfail": "false positive"}]}
+    assert check_facts(solos_report, gone) == []
+
+
+def test_expected_facts_file_loads_and_each_entry_is_well_formed():
+    expected = load_expected()
+    assert isinstance(expected, dict)
+    for stem, facts in expected.items():
+        for want in facts.get("features", []) + facts.get("not_features", []):
+            assert "instrument" in want or "instruments" in want, f"{stem}: {want}"
+            if "xfail" in want:
+                assert want["xfail"], f"{stem}: xfail needs a reason"
 
 
 @needs_corpus
