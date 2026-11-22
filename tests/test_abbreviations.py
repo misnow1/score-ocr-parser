@@ -167,3 +167,8 @@ def test_unrecognised_label_on_several_pages_warns_once_with_page_count(tmp_path
     assert len(hits) == 1
     assert "3 pages" in hits[0]
     assert report.unknown_labels.count("Kazoo") == 1
+
+
+def test_capitalised_bass_label_is_an_instrument_not_a_choir_label(tmp_path):
+    report = parse_score(make_score(tmp_path / "s.pdf", [(150, FIRST + ["BASS"])]))
+    assert "Bass" in chairs(report)
