@@ -123,14 +123,13 @@ scores:
 
   # A scan (OCR). Page-1 staves: Alto Sax 1-2, Tenor Sax 1-2, Baritone Sax, Trumpet 1-4,
   # Trombone 1-4, Guitar, Piano, Bass, Drums, Vibraphone. Staff names are not abbreviated on later pages.
-  # The checker cannot test chair numbers on instruments; the tool misses Trumpet 1 and 4 and adds a bogus Trombone 29.
   "SCORE- The Most Wonderful Time of the Year  copy":
     instruments:
-      - Alto Sax
-      - Tenor Sax
+      - {name: Alto Sax, chairs: [1, 2]}
+      - {name: Tenor Sax, chairs: [1, 2]}
       - Baritone Sax
-      - Trumpet
-      - Trombone
+      - {name: Trumpet, chairs: [1, 2, 3, 4]}
+      - {name: Trombone, chairs: [1, 2, 3, 4]}
       - Guitar
       - Piano
       - Bass
