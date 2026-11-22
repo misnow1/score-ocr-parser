@@ -262,6 +262,39 @@ def chair_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+VOCAL_LABELS = FULL + ["Voice Lead F", "Voice Lead M", "Voice bck F"]
+
+
+def vocal_leads(music_font: Path, out: Path) -> None:
+    """Vocal lead markings: "Female Lead Verse 1" with a bare "solo" above the
+    Voice Lead F staff, a "Male Lead Verse 2" text whose "solo" sits above a
+    backing vocal staff, a bare "solo" above the Voice Lead M staff (next page: the same voice on the
+    next system is one feature), a lone one above Voice Lead F, and an
+    instrument solo that must stay one."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Vocal Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, VOCAL_LABELS, music_font, [
+        (150, 120, "1", 7), (200, 105, "B", 12),
+        (200, ys_at(150, 0) - 12, "ALTO SOLO", 9),
+        (300, ys_at(150, 5) - 18, "Female Lead Verse 1", 9),
+        (300, ys_at(150, 5) - 12, "solo", 9),
+        (450, ys_at(150, 6) - 15, "Male Lead Verse 2", 9),
+        (450, ys_at(150, 7) - 12, "solo", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, VOCAL_LABELS, music_font, [
+        (150, 120, "9", 7),
+        (300, ys_at(150, 6) - 12, "solo", 9),
+    ])
+    p3 = doc.new_page(width=612, height=792)
+    _system(p3, 150, VOCAL_LABELS, music_font, [
+        (150, 120, "17", 7),
+        (300, ys_at(150, 5) - 12, "solo", 9),
+    ])
+    doc.save(out)
+
+
 def non_bar_numbers(music_font: Path, out: Path) -> None:
     """Numbers that are not bar numbers: a time signature at the start of the
     system, a running header with a page number ("10 Score"), and triplet 3s
@@ -555,6 +588,7 @@ def main() -> None:
         rehearsal_marks(font, OUT / "rehearsal_marks.pdf")
         chair_solos(font, OUT / "finale_chair_solos.pdf")
         non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
+        vocal_leads(font, OUT / "finale_vocal_leads.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")

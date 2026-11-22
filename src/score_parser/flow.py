@@ -13,8 +13,13 @@ LOW_CONFIDENCE = 0.8  # below this a step gets a TODO(score-parser) comment
 
 
 def _step(f: Feature) -> FlowStep:
-    who = f.instrument or "Unknown instrument"
-    section = f"{who} {f.kind}" + (f" ({f.rehearsal_mark})" if f.rehearsal_mark else "")
+    vocal = f.kind == "vocal lead"
+    if vocal:
+        who = f"{f.voice.capitalize()} vocal lead" if f.voice else "Vocal lead"
+        who += f", {f.section}" if f.section else ""
+    else:
+        who = f"{f.instrument or 'Unknown instrument'} {f.kind}"
+    section = who + (f" ({f.rehearsal_mark})" if f.rehearsal_mark else "")
     where = [f"page {f.page}"]
     if f.bar is not None:
         where.append(f"bar {f.bar}")
@@ -26,11 +31,12 @@ def _step(f: Feature) -> FlowStep:
         where.append("chair ambiguous (shared staff)")
     note = f"{', '.join(where)}; confidence {f.confidence:g}"
     todo = None
-    if f.confidence < LOW_CONFIDENCE or f.instrument is None:
+    if f.confidence < LOW_CONFIDENCE or (f.instrument is None and not vocal):
         todo = f"low confidence ({f.confidence:g}): " + "; ".join(f.reasons)
     elif f.chair_ambiguous:
         todo = "chair ambiguous: " + "; ".join(f.reasons)
-    return FlowStep(section, (f.instrument or "unknown").lower(), note, todo)
+    who = "vocal" if vocal else (f.instrument or "unknown").lower()
+    return FlowStep(section, who, note, todo)
 
 
 def build_flow(features: list[Feature]) -> list[FlowStep]:
