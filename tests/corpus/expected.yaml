@@ -64,7 +64,7 @@ scores:
     # One shared feature and seven vocal leads; no other instrument solos.
     max_features: 8
     features:
-      - {instruments: [Clarinet, Soprano Sax, Trumpet], kind: shared, page: 1, bar: 9, mark: A, xfail: "marker A is not read and the three are not reported at bar 9"}
+      - {instruments: [Clarinet, Soprano Sax, Trumpet], kind: shared, page: 1, bar: 9, mark: A, xfail: "marker A is read now; the three are not reported together and p1 has no bar 9"}
       # The tool reports these vocalists as no instrument and has no male/female.
       - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "vocal lead not recognised (female, after B)"}
       - {instrument: Vocal, kind: vocal, page: 3, mark: C, xfail: "vocal lead not recognised (male, at C)"}

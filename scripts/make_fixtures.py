@@ -424,6 +424,31 @@ def label_repair_overprint(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def rehearsal_marks(music_font: Path, out: Path) -> None:
+    """Mark A printed below a tempo line, mark C in one row with the words
+    "VERSE 2", and a page with no mark at all (the mark must not carry over)."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Marks Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7),
+        (150, 90, "Moderate swing", 10),
+        (200, 105, "A", 12),
+        (320, ys_at(150, 2) - 12, "TBN SOLO", 9),
+    ])
+    _system(p1, 400, ABBR, music_font, [
+        (150, 370, "17", 7),
+        (200, 350, "C", 12), (216, 350, "VERSE", 10), (252, 350, "2", 10),
+        (350, ys_at(400, 3) - 12, "GUITAR SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, ABBR, music_font, [
+        (150, 120, "33", 7),
+        (250, ys_at(150, 4) - 12, "DRUM SOLO", 9),
+    ])
+    doc.save(out)
+
+
 def scanned(src: Path, out: Path, dpi: int) -> None:
     """An image-only PDF: the source page rendered at `dpi`, no text layer."""
     with pymupdf.open(src) as doc:
@@ -527,6 +552,7 @@ def main() -> None:
         label_repair_noise(font, OUT / "label_repair_noise.pdf")
         label_repair_unlabeled(font, OUT / "label_repair_unlabeled.pdf")
         label_repair_overprint(font, OUT / "label_repair_overprint.pdf")
+        rehearsal_marks(font, OUT / "rehearsal_marks.pdf")
         chair_solos(font, OUT / "finale_chair_solos.pdf")
         non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
     for dpi in (300, 90):

@@ -71,13 +71,16 @@ def _longest_non_decreasing(values: list[int]) -> list[int]:
 
 
 def current_mark(systems: list[HasMarks], system: HasMarks, x: float) -> str | None:
-    """Latest rehearsal mark at or before (page, system, x) in reading order."""
+    """The mark in force at (page, system, x): the latest one at or before it in
+    reading order on the same page. A mark never carries onto another page."""
     current = None
     for s in systems:
-        if (s.page, s.index) > (system.page, system.index):
+        if s.page != system.page:
+            continue
+        if s.index > system.index:
             break
         for mx, text in s.marks:
-            if (s.page, s.index) < (system.page, system.index) or mx <= x + X_SLACK:
+            if s.index < system.index or mx <= x + X_SLACK:
                 current = text
     return current
 
@@ -108,7 +111,19 @@ def read_phrase(
         if len(phrase) == 1:
             return bar, None, None
         phrase = phrase[1:]  # glued "29ALTO SOLO": the number is split off
-    text = " ".join(t.text for t in phrase)
-    if yc < top and (_CAPITAL.match(text) or text.lower() in _rehearsal_words()):
-        return bar, (phrase[0].x0, text), None
+    if yc < top:
+        word = _mark_prefix(phrase)
+        if word:
+            rest = phrase[len(word):]
+            return bar, (phrase[0].x0, " ".join(t.text for t in word)), rest or None
     return bar, None, phrase
+
+
+def _mark_prefix(phrase: list[Token]) -> list[Token]:
+    """The leading tokens of a phrase that form a rehearsal mark (a single
+    capital, or the whole phrase when it is a section word), so a mark printed beside a digit or text line
+    is split off it; empty when the phrase does not start with one."""
+    if _CAPITAL.match(phrase[0].text):
+        return phrase[:1]
+    text = " ".join(t.text for t in phrase)
+    return phrase if text.lower() in _rehearsal_words() else []
