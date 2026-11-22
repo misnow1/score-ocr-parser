@@ -35,8 +35,8 @@ scores:
       - Drums
       - Wood Block
     # Thirteen verified features; the Bass Guitar "Solo" on p1 mm1-5 is ambiguous, so one extra is allowed
-    # (14). Three false positives (see not_features) are still reported: lower to 14 when they are gone.
-    max_features: 17
+    # (14); the reported list matches that (the three false positives are gone).
+    max_features: 14
     features:
       - {instrument: Alto Sax, page: 5, bar: 29}
       - {instrument: Trombone, page: 8, bar: 44, xfail: "reported at bar 45: the cue copies are in bar 45; the own-staff SOLO in bar 44 is only a location (see ADR 0002)"}

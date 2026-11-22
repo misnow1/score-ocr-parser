@@ -262,6 +262,36 @@ def chair_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def distinct_solos(music_font: Path, out: Path) -> None:
+    """Solos of one instrument on neighbouring systems that are not copies: a
+    trombone solo at bar 9 and another at bar 41 on the next system, and a
+    guitar solo above "Gtr. 1" (restated on the next system, a reminder) followed
+    by one above "Gtr. 2" on the next page (a different chair)."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Distinct Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7),
+        (320, ys_at(150, 2) - 12, "TBN SOLO", 9),
+    ])
+    _system(p1, 400, ABBR, music_font, [
+        (150, 370, "41", 7), (180, ys_at(400, 2) - 12, "TBN SOLO", 9),
+    ])
+    gtrs = ["A. Sx.", "Gtr. 1", "Gtr. 2"]
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 120, gtrs, music_font, [
+        (150, 100, "49", 7), (200, ys_at(120, 1) - 12, "SOLO", 9),
+    ])
+    _system(p2, 400, gtrs, music_font, [
+        (150, 380, "57", 7), (180, ys_at(400, 1) - 12, "SOLO", 9),
+    ])
+    p3 = doc.new_page(width=612, height=792)
+    _system(p3, 150, gtrs, music_font, [
+        (150, 120, "65", 7), (200, ys_at(150, 2) - 12, "SOLO", 9),
+    ])
+    doc.save(out)
+
+
 VOCAL_LABELS = FULL + ["Voice Lead F", "Voice Lead M", "Voice bck F"]
 
 
@@ -622,6 +652,7 @@ def main() -> None:
         non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
         sparse_bar_numbers(font, OUT / "finale_sparse_bar_numbers.pdf")
         vocal_leads(font, OUT / "finale_vocal_leads.pdf")
+        distinct_solos(font, OUT / "finale_distinct_solos.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")

@@ -330,21 +330,36 @@ def collect_candidates(
     return candidates, list(warnings)
 
 
+MAX_REMINDER_GAP = 16  # bars: a reminder sits on the next system, one row of bars on
+
+
+def _is_reminder_of(c: Candidate, group: list[Candidate]) -> bool:
+    """Whether `c` restates the solo in `group` rather than starting another:
+    it is on the same or the next system, in the first bar of a later row,
+    on no other chair (on a later system), and no more than a row of bars on."""
+    last = group[-1]
+    if c.system_index - last.system_index > 1:
+        return False
+    if c.row != last.row and not c.opens_row:
+        return False
+    # Copies on one system may name different chairs (one above each staff);
+    # a restatement on the next system keeps its chair.
+    chairs = {g.chair for g in group if g.chair is not None}
+    if c.system_index != last.system_index and c.chair is not None and chairs and c.chair not in chairs:
+        return False
+    return c.bar is None or last.bar is None or abs(c.bar - last.bar) <= MAX_REMINDER_GAP
+
+
 def merge_candidates(candidates: list[Candidate]) -> list[list[Candidate]]:
     """Groups of copies, in reading order. A candidate joins the group with its
-    key when that group was last seen on the same system or the one before it
-    (a copy on another staff, or a reminder on the next system or page). When
-    barlines are counted, a reminder on another row of bars must sit in that
-    row's first bar; a marking further in is a new feature."""
+    key when it is a reminder of it (see `_is_reminder_of`): a copy on another
+    staff, or a restatement on the next system or page. A solo by the same
+    instrument on another chair or many bars on is a new feature."""
     groups: list[list[Candidate]] = []
     latest: dict[MergeKey, list[Candidate]] = {}
     for c in candidates:
         group = latest.get(c.key)
-        if (
-            group is None
-            or c.system_index - group[-1].system_index > 1
-            or (c.row != group[-1].row and not c.opens_row)
-        ):
+        if group is None or not _is_reminder_of(c, group):
             group = latest[c.key] = []
             groups.append(group)
         group.append(c)

@@ -94,3 +94,18 @@ def test_solos_are_placed_by_counting_barlines_from_the_nearest_printed_number()
     guitar = feature_at(report, "GUITAR SOLO")
     assert any("previous system" in r for r in guitar.reasons)
     assert guitar.confidence < tbn.confidence
+
+
+def test_same_instrument_at_clearly_different_measures_stays_separate():
+    report = parse_score(FIXTURES / "finale_distinct_solos.pdf")
+
+    trombones = [f for f in report.features if f.instrument == "Trombone"]
+    assert [(f.page, f.bar) for f in trombones] == [(1, 9), (1, 41)]
+
+
+def test_different_chairs_stay_separate_and_a_restated_chair_merges():
+    report = parse_score(FIXTURES / "finale_distinct_solos.pdf")
+
+    guitars = [f for f in report.features if f.instrument == "Guitar"]
+    got = [(f.chair, f.page, f.bar, [(loc.page, loc.bar) for loc in f.locations]) for f in guitars]
+    assert got == [(1, 2, 49, [(2, 49), (2, 57)]), (2, 3, 65, [(3, 65)])]
