@@ -10,6 +10,9 @@ from .models import Page, PageReason, Token
 # A page with at most this many words and a mostly-covering image is a scan.
 MAX_TEXT_WORDS = 5
 MIN_IMAGE_COVERAGE = 0.5
+# A drawn vertical rule at least this long (points) may be a barline.
+MIN_BARLINE_LENGTH = 20.0
+MAX_BARLINE_WIDTH = 3.0
 # Pages below this resolution are upscaled to it before OCR.
 TARGET_DPI = 300
 # Below this resolution, or this mean OCR confidence, results can't be trusted.
@@ -86,7 +89,23 @@ def _text_page(pg: pymupdf.Page, number: int) -> Page:
     for x0, y0, x1, y1, text, *_ in pg.get_text("words"):
         box = pymupdf.Rect(x0, y0, x1, y1)
         tokens.append(Token(text, x0, y0, x1, y1, number, _word_font(box, chars)))
-    return Page(number, pg.rect.width, pg.rect.height, tokens, reason="text")
+    return Page(number, pg.rect.width, pg.rect.height, tokens, reason="text", barlines=_barlines(pg))
+
+
+def _barlines(pg: pymupdf.Page) -> list[tuple[float, float, float]]:
+    """Vertical rules (drawn lines, or thin filled rectangles) as (x, y0, y1), sorted."""
+    found = []
+    for drawing in pg.get_drawings():
+        for item in drawing["items"]:
+            if item[0] == "l":
+                a, b = item[1], item[2]
+                if abs(a.x - b.x) < 1 and abs(a.y - b.y) >= MIN_BARLINE_LENGTH:
+                    found.append((a.x, min(a.y, b.y), max(a.y, b.y)))
+            elif item[0] == "re":
+                r = item[1]
+                if r.width <= MAX_BARLINE_WIDTH and r.height >= MIN_BARLINE_LENGTH:
+                    found.append(((r.x0 + r.x1) / 2, r.y0, r.y1))
+    return sorted(found)
 
 
 def _word_font(box: pymupdf.Rect, chars: list[tuple[pymupdf.Point, str]]) -> str:

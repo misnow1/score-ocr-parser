@@ -79,3 +79,18 @@ def test_numbers_that_are_not_bars_are_not_taken_as_bars():
     got = {(f.instrument, f.page, f.bar) for f in report.features}
     # time signature "44" (p1), header "10 Score" (p2), triplet 3s (p3)
     assert got == {("Alto Sax", 1, 1), ("Trombone", 2, 33), ("Guitar", 3, 49)}
+
+
+def test_solos_are_placed_by_counting_barlines_from_the_nearest_printed_number():
+    report = parse_score(FIXTURES / "finale_sparse_bar_numbers.pdf")
+
+    got = {(f.instrument, f.page, f.bar) for f in report.features}
+    # bar "5" is printed once on page 1; page 2 prints none and continues the count
+    assert got == {("Alto Sax", 1, 4), ("Trombone", 1, 6), ("Trombone", 2, 10), ("Guitar", 2, 11)}
+    alto = next(f for f in report.features if f.instrument == "Alto Sax")
+    assert [(loc.page, loc.bar) for loc in alto.locations] == [(1, 4), (2, 8)]  # reminder at the row start
+    tbn = next(f for f in report.features if f.instrument == "Trombone" and f.page == 1)
+    assert any("counted" in r and "bar 5" in r for r in tbn.reasons)
+    guitar = feature_at(report, "GUITAR SOLO")
+    assert any("previous system" in r for r in guitar.reasons)
+    assert guitar.confidence < tbn.confidence
