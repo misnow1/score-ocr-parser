@@ -167,3 +167,24 @@ def test_cello_bass_is_a_combined_entry_flagged_for_review(tmp_path):
     assert "Electric Bass" not in names
     assert any("Cello-Bass" in w and "review" in w for w in report.warnings)
     assert report.unknown_labels == []
+
+
+def make_pages(path, pages):
+    doc = pymupdf.open()
+    for systems in pages:
+        page = doc.new_page(width=612, height=792)
+        for top, labels in systems:
+            for i, label in enumerate(labels):
+                page.insert_text((30, top + i * 30), label, fontname="helv", fontsize=9)
+                page.draw_line((140, top + i * 30), (580, top + i * 30))
+    doc.save(path)
+    return path
+
+
+def test_unrecognised_label_on_several_pages_warns_once_with_page_count(tmp_path):
+    pages = [[(150, FIRST)]] + [[(150, ["SATB", "Guitar"])] for _ in range(3)]
+    report = parse_score(make_pages(tmp_path / "s.pdf", pages))
+    hits = [w for w in report.warnings if "'SATB' is not recognised" in w]
+    assert len(hits) == 1
+    assert "3 pages" in hits[0]
+    assert report.unknown_labels.count("SATB") == 1
