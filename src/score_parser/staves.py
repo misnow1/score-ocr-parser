@@ -17,6 +17,7 @@ from .models import Page
 class Staff:
     label: str
     yc: float
+    voice: bool = False  # a voice staff (or a vocal group label): never an instrument
 
 
 class HasStaves(Protocol):

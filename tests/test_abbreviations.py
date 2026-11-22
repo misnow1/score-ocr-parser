@@ -83,8 +83,16 @@ def test_combined_label_with_unknown_part_stays_unrecognised(tmp_path):
     assert any("not recognised" in w for w in report.warnings)
 
 
-@pytest.mark.parametrize("label", ["SATB", "Choir", "Voice Lead", "Voice bck", "VCLS", "A.", "Bar."])
-def test_choir_and_ambiguous_labels_stay_unrecognised(tmp_path, label):
+@pytest.mark.parametrize("label", ["SATB", "Choir", "Voice Lead", "Voice bck"])
+def test_choir_and_voice_labels_are_voice_staves_not_warnings(tmp_path, label):
+    pdf = make_score(tmp_path / "s.pdf", [(150, FIRST), (500, [label])])
+    report = parse_score(pdf)
+    assert report.warnings == [] and report.unknown_labels == []
+    assert label not in [lb for e in report.instrumentation for lb in e.labels]
+
+
+@pytest.mark.parametrize("label", ["VCLS", "A.", "Bar."])
+def test_ambiguous_labels_stay_unrecognised(tmp_path, label):
     pdf = make_score(tmp_path / "s.pdf", [(150, FIRST), (500, [label])])
     report = parse_score(pdf)
     assert any(f"'{label}' is not recognised" in w for w in report.warnings)
@@ -182,9 +190,14 @@ def make_pages(path, pages):
 
 
 def test_unrecognised_label_on_several_pages_warns_once_with_page_count(tmp_path):
-    pages = [[(150, FIRST)]] + [[(150, ["SATB", "Guitar"])] for _ in range(3)]
+    pages = [[(150, FIRST)]] + [[(150, ["Kazoo", "Guitar"])] for _ in range(3)]
     report = parse_score(make_pages(tmp_path / "s.pdf", pages))
-    hits = [w for w in report.warnings if "'SATB' is not recognised" in w]
+    hits = [w for w in report.warnings if "'Kazoo' is not recognised" in w]
     assert len(hits) == 1
     assert "3 pages" in hits[0]
-    assert report.unknown_labels.count("SATB") == 1
+    assert report.unknown_labels.count("Kazoo") == 1
+
+
+def test_capitalised_bass_label_is_an_instrument_not_a_choir_label(tmp_path):
+    report = parse_score(make_score(tmp_path / "s.pdf", [(150, FIRST + ["BASS"])]))
+    assert "Bass" in chairs(report)

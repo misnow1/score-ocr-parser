@@ -353,6 +353,22 @@ def vocal_leads(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def voice_staves(music_font: Path, out: Path) -> None:
+    """Voice staves: a "VOCALS" group label printed between two staves both labelled "Alto"
+    (vocal parts, not the sax) on page 1, and on page 2 an "SATB" choir staff and a run of vocal
+    part abbreviations ("A.", "Bar.") under the instrument staves."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Choir Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, ["Alto", "Alto", "Flute", "Trumpet in Bb", "Drums"], music_font, [
+        (30, ys_at(150, 0) + STAFF_GAP / 2, "VOCALS", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, ["Fl.", "Bb Tpt.", "SATB", "Dr."], music_font, [])
+    _system(p2, 400, ["Fl.", "A.", "Bar."], music_font, [])
+    doc.save(out)
+
+
 def non_bar_numbers(music_font: Path, out: Path) -> None:
     """Numbers that are not bar numbers: a time signature at the start of the
     system, a running header with a page number ("10 Score"), and triplet 3s
@@ -692,6 +708,7 @@ def main() -> None:
         non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
         sparse_bar_numbers(font, OUT / "finale_sparse_bar_numbers.pdf")
         vocal_leads(font, OUT / "finale_vocal_leads.pdf")
+        voice_staves(font, OUT / "finale_voice_staves.pdf")
         distinct_solos(font, OUT / "finale_distinct_solos.pdf")
         shared_solos(font, OUT / "finale_shared_solos.pdf")
         absent_instrument_solo(font, OUT / "finale_absent_instrument_solo.pdf")

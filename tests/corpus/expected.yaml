@@ -141,7 +141,8 @@ scores:
 
   # Page-1 staves: Vocals (two staves, Alto and Alto: vocal parts, not the sax), Flute, Trumpet in Bb,
   # Trombone, Guitar, Organ (unlabeled on later pages), Piano, Acoustic Bass ("A.B."), Drum Set.
-  # The tool also reads the vocal "Alto" label as Alto Sax; the checker cannot assert an instrument is absent.
+  # The two "Alto" staves under the "Vocals" group are voice staves: the tool reports no Alto Sax or Lead Vocal
+  # (the checker cannot assert an instrument is absent; the in-place run shows it).
   "What Child is This 2018 - SCORE":
     instruments:
       - Flute
