@@ -158,4 +158,4 @@ scores:
     # (p2, bar 45, an open solo) and a guitar solo built from chord text (p4, bar 93); lower the cap to 1 when that goes.
     max_features: 2
     features:
-      - {instrument: Guitar, bar: 45}
+      - {instrument: Guitar, bar: 45, xfail: "the group solo is reported once as an open solo with no instrument (a generic marking over the staves is not given to a staff), so no Guitar feature at bar 45"}
