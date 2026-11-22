@@ -353,6 +353,42 @@ def vocal_leads(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+CUE_LABELS = ["Alto Saxophone 1", "Trumpet in Bb 1-4", "Drums", "SATB", "Piano"]
+
+
+def vocal_cues(music_font: Path, out: Path) -> None:
+    """Vocal cues over a choir staff (no voice): a bare "Solo" that carries over a page turn
+    as "Verse 1x - Solo" (one feature), a "Solo or All" many bars on (another), a "(Solo)"
+    printed just under the SATB label, between its two staves, which sits far above the Piano
+    staff (still a vocal cue, not a Piano solo), and an instrument solo that must stay one."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Cue Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, CUE_LABELS, music_font, [
+        (150, 120, "1", 7),
+        (200, ys_at(150, 0) - 12, "ALTO SOLO", 9),
+        (300, ys_at(150, 3) - 12, "Solo", 9),
+    ])
+    _system(p1, 400, ["A. Sx. 1", "Drums"], music_font, [])  # a rhythm stack between the choir systems
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, CUE_LABELS, music_font, [
+        (150, 120, "9", 7),
+        (200, ys_at(150, 3) - 12, "Verse 1x - Solo", 9),
+    ])
+    _system(p2, 400, ["A. Sx. 1", "Drums"], music_font, [])
+    p3 = doc.new_page(width=612, height=792)
+    _system(p3, 150, CUE_LABELS, music_font, [
+        (150, 120, "40", 7),
+        (300, ys_at(150, 3) - 12, "Solo or All", 9),
+    ])
+    p4 = doc.new_page(width=612, height=792)
+    _system(p4, 150, CUE_LABELS, music_font, [
+        (150, 120, "60", 7),
+        (300, ys_at(150, 3) + 8, "(Solo)", 9),
+    ])
+    doc.save(out)
+
+
 def voice_staves(music_font: Path, out: Path) -> None:
     """Voice staves: a "VOCALS" group label printed between two staves both labelled "Alto"
     (vocal parts, not the sax) on page 1, and on page 2 an "SATB" choir staff and a run of vocal
@@ -730,6 +766,7 @@ def main() -> None:
         bar_numbers_below(font, OUT / "finale_bar_numbers_below.pdf")
         vocal_leads(font, OUT / "finale_vocal_leads.pdf")
         voice_staves(font, OUT / "finale_voice_staves.pdf")
+        vocal_cues(font, OUT / "finale_vocal_cues.pdf")
         distinct_solos(font, OUT / "finale_distinct_solos.pdf")
         shared_solos(font, OUT / "finale_shared_solos.pdf")
         absent_instrument_solo(font, OUT / "finale_absent_instrument_solo.pdf")
