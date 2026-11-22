@@ -146,8 +146,10 @@ def test_shared_feature_needs_every_listed_instrument_at_the_same_place(solos_re
     assert check_facts(solos_report, feature_fact(instrument="Drums", kind="shared"))
 
 
-def test_chair_fact_fails_while_the_tool_reports_no_chair(solos_report):
-    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", chair=1))
+def test_chair_fact_must_match_the_reported_chair(solos_report):
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", chair=1)) == []
+    assert check_facts(solos_report, feature_fact(instrument="Alto Sax", chair=2))
+    assert check_facts(solos_report, feature_fact(instrument="Drums", chair=1))  # reported no chair
 
 
 def test_max_features_caps_the_feature_count(solos_report):

@@ -34,8 +34,8 @@ scores:
       - Electric Bass
       - Drums
       - Wood Block
-    # Thirteen verified features; the Bass Guitar "Solo" on p1 mm1-5 is ambiguous, so one extra is allowed.
-    max_features: 14
+    # Thirteen verified features; the Bass Guitar "Solo" on p1 mm1-5 is ambiguous, so one extra is allowed; splitting Guitar 1 and 2 by chair (#22) adds one more.
+    max_features: 15
     features:
       - {instrument: Alto Sax, page: 5, bar: 29}
       - {instrument: Trombone, page: 8, bar: 44, xfail: "reported at bar 45"}
@@ -47,13 +47,13 @@ scores:
       - {instrument: Tenor Sax, page: 16, bar: 94}
       - {instrument: Violin, page: 19, bar: 110}
       - {instrument: Guitar, page: 23, bar: 135}
-      - {instrument: Guitar, page: 24, bar: 143, xfail: "not found"}
+      - {instrument: Guitar, page: 24, bar: 143}
       - {instrument: Guitar, page: 26, bar: 151}
       - {instrument: Guitar, page: 28, bar: 164}
-      - {instrument: Guitar, chair: 1, page: 23, bar: 135, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 2, page: 24, bar: 143, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 1, page: 26, bar: 151, xfail: "the tool reports no chair for a feature"}
-      - {instrument: Guitar, chair: 2, page: 28, bar: 164, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 1, page: 23, bar: 135}
+      - {instrument: Guitar, chair: 2, page: 24, bar: 143}
+      - {instrument: Guitar, chair: 1, page: 26, bar: 151}
+      - {instrument: Guitar, chair: 2, page: 28, bar: 164}
     not_features:
       - {instrument: Baritone Sax, page: 5}
       - {instrument: Trombone, page: 13}
@@ -78,4 +78,4 @@ scores:
     max_features: 1
     features:
       - {instrument: Guitar, page: 16, bar: 62}
-      - {instrument: Guitar, chair: 1, page: 16, bar: 62, xfail: "the tool reports no chair for a feature"}
+      - {instrument: Guitar, chair: 1, page: 16, bar: 62}

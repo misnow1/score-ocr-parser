@@ -95,6 +95,8 @@ class Feature:
     confidence: float
     reasons: list[str] = field(default_factory=list)
     locations: list[Location] = field(default_factory=list)
+    chair: int | None = None  # from the marking text or a numbered staff
+    chair_ambiguous: bool = False  # on a staff shared by several chairs ("Gtrs.")
 
 
 @dataclass

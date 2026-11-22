@@ -5,6 +5,9 @@
 # `bare_doubling: true` marks an instrument that counts as a doubling when its
 # name appears alone in instruction text ("piccolo trpt"). Any instrument is a
 # doubling after "to" ("to Flute").
+#
+# `shared_aliases` lists the aliases that name one staff shared by several
+# chairs ("Gtrs."). A feature on such a staff has an ambiguous chair.
 instruments:
   - name: Flute
     family: Woodwind
@@ -61,6 +64,7 @@ instruments:
   - name: Guitar
     family: Rhythm
     aliases: [guitar, guitars, gtr, gtrs, electric guitar, e gtr, acoustic guitar, ac gtr, a gtr, lead guitar, ld gtr]
+    shared_aliases: [guitars, gtrs]  # one staff for every chair of the instrument
   - name: Bass
     family: Rhythm
     aliases: [bass, double bass, acoustic bass, upright bass, bs, db]

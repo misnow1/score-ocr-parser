@@ -28,6 +28,13 @@ class Resolved:
     chairs: list[int]
     doublings: list[str]
     also: list["Resolved"] = field(default_factory=list)  # further parts of a combined label
+    chairs_given: bool = False  # the label printed a chair; `chairs` is [1] otherwise
+    shared: bool = False  # one staff for every chair ("Gtrs."), or several chairs given
+
+    @property
+    def single_chair(self) -> int | None:
+        """The one chair the label states, or None (none printed, or several)."""
+        return self.chairs[0] if self.chairs_given and len(self.chairs) == 1 else None
 
     def parts(self) -> list["Resolved"]:
         """This instrument and the further parts of a combined label."""
@@ -42,6 +49,11 @@ def _data() -> list[dict]:
 @cache
 def _table() -> dict[str, tuple[str, str]]:
     return {alias: (i["name"], i["family"]) for i in _data() for alias in i["aliases"]}
+
+
+@cache
+def _shared_aliases() -> frozenset[str]:
+    return frozenset(a for i in _data() for a in i.get("shared_aliases", []))
 
 
 @cache
@@ -112,10 +124,12 @@ def _resolve_part(text: str) -> Resolved | None:
     elif lead:
         chairs = _chairs(lead.group(1))
         text = text.strip()[lead.end() :]
-    hit = _table().get(_normalise(text))
+    alias = _normalise(text)
+    hit = _table().get(alias)
     if hit is None:
         return None
-    return Resolved(hit[0], hit[1], chairs or [1], [])
+    shared = len(chairs) > 1 or alias in _shared_aliases()
+    return Resolved(hit[0], hit[1], chairs or [1], [], chairs_given=bool(chairs), shared=shared)
 
 
 def instruction_doublings(text: str) -> list[str]:
