@@ -239,6 +239,7 @@ def test_empty_page_and_empty_instrumentation_warn(tmp_path, monkeypatch):
     # OCR is macOS-only; stand in for it so this runs everywhere.
     stub = types.SimpleNamespace(recognise=lambda png, rect, page: [])
     monkeypatch.setitem(sys.modules, "score_parser.ocr", stub)
+    monkeypatch.setitem(sys.modules, "Vision", types.ModuleType("Vision"))  # the OCR path also checks Vision imports
 
     report = parse_score(blank)
 
