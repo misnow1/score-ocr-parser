@@ -322,6 +322,38 @@ def non_bar_numbers(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def _barlines(page, top: float, labels: int, xs: tuple[float, ...]) -> None:
+    """Vertical barlines through every staff of a system (drawn, as a text-layer score does)."""
+    for x in xs:
+        page.draw_line((x, top - 8), (x, ys_at(top, labels - 1) + 8))
+
+
+BAR_XS = (140, 240, 340, 440, 540)  # four bars; the first and last lines are the system edges
+
+
+def sparse_bar_numbers(music_font: Path, out: Path) -> None:
+    """Bar numbers printed sparsely: one on page 1 (centred on its barline) and
+    none on page 2, so a solo mid-system needs barline counting and a system
+    without numbers continues from the one before."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Sparse Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (237, 120, "5", 7),  # bar 5 starts at the second barline
+        (145, ys_at(150, 0) - 12, "ALTO SOLO", 9),  # bar 4: left of the printed number
+        (345, ys_at(150, 2) - 12, "TBN SOLO", 9),  # bar 6: one barline past the number
+    ])
+    _barlines(p1, 150, len(FULL), BAR_XS)
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, ABBR, music_font, [
+        (445, ys_at(150, 3) - 12, "GUITAR SOLO", 9),  # no number on the page: bar 8 + 3
+        (145, ys_at(150, 0) - 12, "ALTO SOLO", 9),  # first bar of the row: a reminder of page 1's
+        (345, ys_at(150, 2) - 12, "TBN SOLO", 9),  # mid-row on the next row: a new solo, bar 10
+    ])
+    _barlines(p2, 150, len(ABBR), BAR_XS)
+    doc.save(out)
+
+
 RA_CUE = ["Piano", "Bass", "Drum Set"]
 RA_FULL = [
     "Piccolo",
@@ -588,6 +620,7 @@ def main() -> None:
         rehearsal_marks(font, OUT / "rehearsal_marks.pdf")
         chair_solos(font, OUT / "finale_chair_solos.pdf")
         non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
+        sparse_bar_numbers(font, OUT / "finale_sparse_bar_numbers.pdf")
         vocal_leads(font, OUT / "finale_vocal_leads.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)

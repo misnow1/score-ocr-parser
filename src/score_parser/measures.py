@@ -5,9 +5,11 @@ lookups turn (page, system, x position) into a bar number or current mark.
 """
 
 import re
+from bisect import bisect_right
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from functools import cache
-from typing import Protocol
+from typing import Literal, NamedTuple, Protocol
 
 from .data import load
 from .models import Page, Token
@@ -16,6 +18,9 @@ X_SLACK = 2.0  # horizontal tolerance when comparing positions
 PAGE_NUMBER_MARGIN = 0.9  # right margin starts at this fraction of the page width
 BAR_ROW_REACH = 60.0  # how far above the top staff a bar number may sit
 BAR_ROW_MIN = 6.0  # a bar number sits above the staff; a time signature sits on it
+BARLINE_MERGE = 4.0  # rules this close are one barline (double and final barlines)
+SPAN_TOLERANCE = 4.0  # slack when asking whether a drawn rule crosses a staff
+SNAP_REACH = 25.0  # a bar number sits within this of the barline it numbers
 _NUMBER = re.compile(r"^\d{1,3}$")
 _CAPITAL = re.compile(r"^[A-Z]$")
 
@@ -27,7 +32,19 @@ class HasMarks(Protocol):
 
 
 class HasBars(Protocol):
-    bars: list[tuple[float, int]]
+    bars: list[tuple[float, int, float]]  # (x0, number, x1)
+
+
+# How a bar was found: counted from a printed number by barlines, continued from
+# the previous system, read as the nearest printed number (text sits left of
+# every number: "assumed"), the same on an OCR page, or not found.
+BarKind = Literal["counted", "continued", "nearest", "assumed", "ocr", "missing"]
+
+
+class BarReading(NamedTuple):
+    bar: int | None
+    kind: BarKind
+    reason: str
 
 
 @cache
@@ -36,13 +53,144 @@ def _rehearsal_words() -> frozenset[str]:
     return frozenset(w.lower() for w in data["rehearsal_words"])
 
 
-def bar_at(bars: list[tuple[float, int]], x: float) -> tuple[int | None, bool]:
-    """(bar number, certain). The last bar number at or left of x; when the
-    text sits left of every bar number, the first bar with certain False."""
-    before = [b for bx, b in bars if bx <= x + X_SLACK]
+def bar_at(bars: list[tuple[float, int, float]], x: float) -> BarReading:
+    """The last bar number at or left of x; when the text sits left of every
+    bar number, the first bar, assumed."""
+    before = [b for bx, b, _ in bars if bx <= x + X_SLACK]
     if before:
-        return before[-1], True
-    return (bars[0][1], False) if bars else (None, True)
+        return BarReading(before[-1], "nearest", f"nearest bar number {before[-1]}")
+    if bars:
+        first = bars[0][1]
+        return BarReading(first, "assumed", f"text sits left of every bar number; assumed first bar {first}")
+    return BarReading(None, "missing", "no bar number found on this system")
+
+
+def merge_barlines(xs: list[float]) -> list[float]:
+    """Sorted barline positions, rules within BARLINE_MERGE merged (the left one kept)."""
+    merged: list[float] = []
+    for x in sorted(xs):
+        if not merged or x - merged[-1] > BARLINE_MERGE:
+            merged.append(x)
+    return merged
+
+
+def barlines_through(rules: list[tuple[float, float, float]], ys: list[float]) -> tuple[list[float], float]:
+    """(barlines, y) of a system whose staves sit at `ys`: the drawn vertical
+    rules crossing the first staff that two or more cross. A label that is no
+    staff (a tempo mark above the first one) has none. Staff by staff, not the
+    union: stems drawn as rules cross some staves and are not barlines."""
+    for y in ys:
+        xs = merge_barlines([x for x, y0, y1 in rules if y0 - SPAN_TOLERANCE <= y <= y1 + SPAN_TOLERANCE])
+        if len(xs) >= 2:
+            return xs, y
+    return [], ys[0]
+
+
+def share_barlines(rules: list[tuple[float, float, float]], upper: float, lower: float) -> bool:
+    """Whether two stacks, with top staves at `upper` and `lower`, are one row of
+    bars: at least two distinct rules run unbroken from one to the other (one
+    alone may be a connector line along the left edge)."""
+    spanning = [x for x, y0, y1 in rules if y0 - SPAN_TOLERANCE <= upper and y1 + SPAN_TOLERANCE >= lower]
+    return len(merge_barlines(spanning)) >= 2
+
+
+def snap_to_barline(barlines: list[float], x0: float, x1: float) -> int | None:
+    """Index of the barline a bar number sits on (numbers are centred on it or
+    start just right of it), or None when none is near."""
+    centre = (x0 + x1) / 2
+    best = min(range(len(barlines)), key=lambda i: abs(barlines[i] - centre), default=None)
+    if best is None or abs(barlines[best] - centre) > SNAP_REACH:
+        return None
+    return best
+
+
+def _interval(barlines: list[float], x: float) -> int:
+    """Index of the bar (counted from the first barline) that x falls in."""
+    return max(0, bisect_right(barlines, x + X_SLACK) - 1)
+
+
+@dataclass
+class BarCount:
+    """Bar numbers by counting barlines on one row of bars. Bar i starts at
+    barline i. `anchors` are the printed numbers as (barline index, number);
+    with none, `carried` is the number of bar 0 continued from the row before."""
+
+    barlines: list[float]
+    anchors: list[tuple[int, int]] = field(default_factory=list)
+    carried: int | None = None
+    carried_from: str = "the previous system"
+
+    def bar_at(self, x: float) -> BarReading | None:
+        i = _interval(self.barlines, x)
+        if self.anchors:
+            before = [a for a in self.anchors if a[0] <= i]
+            idx, number = before[-1] if before else self.anchors[0]
+            bar, away = number + (i - idx), abs(i - idx)
+            if away == 0:
+                return BarReading(bar, "counted", f"nearest bar number {number}")
+            plural = "barline" if away == 1 else "barlines"
+            direction = "back from" if i < idx else "from"
+            return BarReading(bar, "counted", f"counted {away} {plural} {direction} printed bar {number}: bar {bar}")
+        if self.carried is not None:
+            bar = self.carried + i
+            return BarReading(
+                bar, "continued", f"no bar number printed here; counted barlines on from {self.carried_from}: bar {bar}"
+            )
+        return None
+
+    def in_first_bar(self, x: float) -> bool:
+        return _interval(self.barlines, x) == 0
+
+    @property
+    def bar_count(self) -> int:
+        return len(self.barlines) - 1
+
+
+class HasRow(Protocol):
+    bars: list[tuple[float, int, float]]
+    barlines: list[float]
+    joins_previous: bool
+    count: BarCount | None
+    row: int
+
+
+def count_bars(systems: list[HasRow]) -> None:
+    """Give each system its `count`, in reading order. Stacks on one row of bars
+    share a count and their printed numbers. A row without a printed number
+    continues from the bars of the row before; a row with no barlines (OCR, or
+    none drawn) has no count and breaks that chain."""
+    rows: list[list[HasRow]] = []
+    for s in systems:
+        if rows and s.joins_previous:
+            rows[-1].append(s)
+        else:
+            rows.append([s])
+    for number, row in enumerate(rows):
+        for s in row:
+            s.row = number
+    running: int | None = 1  # the number the next row's first bar has, when known
+    for row in rows:
+        barlines = row[0].barlines
+        if len(barlines) < 2:
+            running = None
+            continue
+        anchors = sorted(
+            (idx, n)
+            for s in row
+            for x0, n, x1 in s.bars
+            if (idx := snap_to_barline(barlines, x0, x1)) is not None
+        )
+        count = BarCount(barlines, anchors)
+        if anchors:
+            idx, n = anchors[-1]
+            running = n + (count.bar_count - idx)
+        elif running is not None:
+            count.carried = running
+            if row is rows[0]:
+                count.carried_from = "the start of the score (bar 1)"
+            running += count.bar_count
+        for s in row:
+            s.count = count if (count.anchors or count.carried is not None) else None
 
 
 def drop_out_of_sequence(systems: list[HasBars]) -> None:
@@ -97,7 +245,7 @@ def page_number_zone(page: Page, label_right: float) -> Callable[[str, float], b
 
 def read_phrase(
     phrase: list[Token], top: float, is_page_number: Callable[[str, float], bool]
-) -> tuple[tuple[float, int] | None, tuple[float, str] | None, list[Token] | None]:
+) -> tuple[tuple[float, int, float] | None, tuple[float, str] | None, list[Token] | None]:
     """Split one phrase near a system whose top staff is at `top` into
     (bar number, rehearsal mark, remaining text phrase). A glued "29ALTO SOLO"
     yields the bar and the rest; a lone number yields only a bar (or nothing)."""
@@ -107,7 +255,7 @@ def read_phrase(
         first = phrase[0]
         fits = top - BAR_ROW_REACH <= yc <= top - BAR_ROW_MIN and not is_page_number(first.text, first.x0)
         if fits:
-            bar = (first.x0, int(first.text))
+            bar = (first.x0, int(first.text), first.x1)
         if len(phrase) == 1:
             return bar, None, None
         phrase = phrase[1:]  # glued "29ALTO SOLO": the number is split off

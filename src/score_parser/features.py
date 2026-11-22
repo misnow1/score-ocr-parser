@@ -12,7 +12,7 @@ from typing import Literal, NamedTuple
 from .layout import is_chord_symbol, running_headers
 from .instruments import Roster, resolve, resolve_against_first_system
 from .models import Feature, FeatureKind, Location, Page, Voice
-from .measures import current_mark, drop_out_of_sequence
+from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
 from .systems import Phrase, System, find_systems
 from .vocal import lead_text, voice_staff
 
@@ -28,7 +28,16 @@ BASE = 0.5
 INSTRUMENT_NAMED = 0.3
 INSTRUMENT_INFERRED = 0.15  # from the staff, or from "male"/"female" alone
 BAR_FOUND = 0.1
-BAR_GUESSED = 0.05  # text sits left of every bar number
+BAR_GUESSED = 0.05
+# Evidence for the bar by how it was found; a bar not found earns nothing.
+BAR_EVIDENCE: dict[BarKind, float] = {
+    "counted": BAR_FOUND,  # barlines counted from a printed number
+    "nearest": BAR_FOUND,
+    "continued": BAR_GUESSED,  # counted on from the previous system, no number here
+    "assumed": BAR_GUESSED,  # text sits left of every bar number
+    "ocr": BAR_GUESSED,  # barlines cannot be counted on a scan
+    "missing": 0.0,
+}
 VOICE_NAMED = 0.3  # a vocal lead whose text names the voice ("Female Lead")
 VOICE_FROM_STAFF = 0.15  # a bare "solo" above a Voice Lead F/M staff
 
@@ -107,9 +116,11 @@ class Candidate:
     reasons: list[str]
     page: int
     system_index: int  # position of the system in reading order
+    row: int  # the row of bars it sits on (stacks of one system share a row)
+    opens_row: bool  # in the first bar of its row, or bars are not counted
     x: float
     bar: int | None
-    bar_certain: bool
+    bar_kind: BarKind
     mark: str | None
     staff: str  # the staff below the text; empty when the text names an absent instrument
     chair: int | None = None
@@ -132,9 +143,7 @@ class Candidate:
 
     @property
     def confidence(self) -> float:
-        if self.bar is None:
-            return self.evidence
-        return self.evidence + (BAR_FOUND if self.bar_certain else BAR_GUESSED)
+        return self.evidence + BAR_EVIDENCE[self.bar_kind]
 
 
 class SystemContext(NamedTuple):
@@ -208,13 +217,8 @@ def _candidate(
             reasons.append(f"staff '{staff.label}' not usable; instrument unknown")
             if check.problem:
                 notes.append(check.problem)
-    bar, certain = system.bar_at(phrase.x0)
-    if bar is None:
-        reasons.append("no bar number found on this system")
-    elif certain:
-        reasons.append(f"nearest bar number {bar}")
-    else:
-        reasons.append(f"text sits left of every bar number; assumed first bar {bar}")
+    reading = system.bar_at(phrase.x0)
+    reasons.append(reading.reason)
     return Candidate(
         kind=kind,
         text=text,
@@ -223,9 +227,11 @@ def _candidate(
         reasons=reasons + notes,
         page=system.page,
         system_index=context.index,
+        row=system.row,
+        opens_row=system.opens_row(phrase.x0),
         x=phrase.x0,
-        bar=bar,
-        bar_certain=certain,
+        bar=reading.bar,
+        bar_kind=reading.kind,
         mark=current_mark(context.systems, system, phrase.x0),
         staff=staff_label,
         chair=chair,
@@ -251,16 +257,12 @@ def _vocal_candidate(
 ) -> Candidate:
     """A vocal lead: its voice named by the text, or taken from the Voice Lead staff."""
     system = context.system
-    bar, certain = system.bar_at(phrase.x0)
+    reading = system.bar_at(phrase.x0)
     if from_text:
         evidence, why = VOICE_NAMED, "voice named in text"
     else:
         evidence, why = VOICE_FROM_STAFF, "voice taken from the Voice Lead staff below"
-    reasons = ["matched vocal lead wording", why]
-    if bar is None:
-        reasons.append("no bar number found on this system")
-    elif not certain:
-        reasons.append(f"text sits left of every bar number; assumed first bar {bar}")
+    reasons = ["matched vocal lead wording", why, reading.reason]
     return Candidate(
         kind="vocal lead",
         text=text,
@@ -269,9 +271,11 @@ def _vocal_candidate(
         reasons=reasons,
         page=system.page,
         system_index=context.index,
+        row=system.row,
+        opens_row=system.opens_row(phrase.x0),
         x=phrase.x0,
-        bar=bar,
-        bar_certain=certain,
+        bar=reading.bar,
+        bar_kind=reading.kind,
         mark=current_mark(context.systems, system, phrase.x0),
         staff="",
         voice=voice,
@@ -329,12 +333,18 @@ def collect_candidates(
 def merge_candidates(candidates: list[Candidate]) -> list[list[Candidate]]:
     """Groups of copies, in reading order. A candidate joins the group with its
     key when that group was last seen on the same system or the one before it
-    (a copy on another staff, or a reminder on the next system or page)."""
+    (a copy on another staff, or a reminder on the next system or page). When
+    barlines are counted, a reminder on another row of bars must sit in that
+    row's first bar; a marking further in is a new feature."""
     groups: list[list[Candidate]] = []
     latest: dict[MergeKey, list[Candidate]] = {}
     for c in candidates:
         group = latest.get(c.key)
-        if group is None or c.system_index - group[-1].system_index > 1:
+        if (
+            group is None
+            or c.system_index - group[-1].system_index > 1
+            or (c.row != group[-1].row and not c.opens_row)
+        ):
             group = latest[c.key] = []
             groups.append(group)
         group.append(c)
@@ -399,5 +409,6 @@ def find_features(
     headers = running_headers(pages)
     systems = [s for page in pages for s in find_systems(page, headers)]
     drop_out_of_sequence(systems)
+    count_bars(systems)
     candidates, warnings = collect_candidates(systems, roster)
     return [build_feature(g) for g in merge_candidates(candidates)], warnings

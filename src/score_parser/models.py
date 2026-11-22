@@ -47,6 +47,8 @@ class Page:
     # Degrees clockwise the scanned content is printed rotated (0, 90 or 270).
     # Tokens and width/height are already in the upright frame.
     rotation: int = 0
+    # Vertical rules drawn on a text-layer page as (x, y0, y1); empty on OCR pages.
+    barlines: list[tuple[float, float, float]] = field(default_factory=list)
     # Music-font glyphs the clean stage took out of `tokens` (clefs, notes).
     glyphs: list[Token] = field(default_factory=list)
 
