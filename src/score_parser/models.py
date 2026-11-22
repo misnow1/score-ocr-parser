@@ -9,8 +9,10 @@ Source = Literal["text", "ocr"]
 PageReason = Literal["text", "image", "pattern", "empty"]
 TitleSource = Literal["filename", "page 1"]
 # A feature's kind: "solo" for solo wording, "feature" for "feature" wording
-# (a featured passage). The glossary's Feature is both kinds.
-FeatureKind = Literal["solo", "feature"]
+# (a featured passage), "vocal lead" for a lead vocalist (kept apart from
+# instrument solos). The glossary's Feature is every kind.
+FeatureKind = Literal["solo", "feature", "vocal lead"]
+Voice = Literal["female", "male"]
 
 
 @dataclass
@@ -97,6 +99,8 @@ class Feature:
     locations: list[Location] = field(default_factory=list)
     chair: int | None = None  # from the marking text or a numbered staff
     chair_ambiguous: bool = False  # on a staff shared by several chairs ("Gtrs.")
+    voice: Voice | None = None  # vocal leads only
+    section: str | None = None  # vocal leads only: "Verse 1", when the marking gives it
 
 
 @dataclass

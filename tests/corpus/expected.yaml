@@ -12,7 +12,7 @@
 #     features:
 #       - {instrument: Alto Sax, page: 5, bar: 29}
 #       - {instruments: [Clarinet, Trumpet], kind: shared, page: 1, bar: 9, mark: A}
-#       - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "known gap"}
+#       - {instrument: Vocal, kind: vocal, voice: female, page: 3, mark: B}
 #     not_features:
 #       - {instrument: Baritone Sax, page: 5}
 #
@@ -65,13 +65,14 @@ scores:
     max_features: 8
     features:
       - {instruments: [Clarinet, Soprano Sax, Trumpet], kind: shared, page: 1, bar: 9, mark: A, xfail: "marker A is not read and the three are not reported at bar 9"}
-      # The tool reports these vocalists as no instrument and has no male/female.
-      - {instrument: Vocal, kind: vocal, page: 3, mark: B, xfail: "vocal lead not recognised (female, after B)"}
-      - {instrument: Vocal, kind: vocal, page: 3, mark: C, xfail: "vocal lead not recognised (male, at C)"}
-      - {instrument: Vocal, kind: vocal, mark: D, xfail: "vocal lead not recognised (female, D + 4 measures, p6-7)"}
-      - {instrument: Vocal, kind: vocal, page: 10, mark: H, xfail: "vocal leads not recognised (male at H, female at H + 4)"}
-      - {instrument: Vocal, kind: vocal, page: 15, xfail: "vocal lead not recognised (male)"}
-      - {instrument: Vocal, kind: vocal, page: 16, xfail: "vocal lead not recognised (female)"}
+      # Vocal leads are features of kind "vocal lead" with a voice, not instruments.
+      - {instrument: Vocal, kind: vocal, voice: female, page: 3, mark: B}
+      - {instrument: Vocal, kind: vocal, voice: male, page: 3, mark: C, xfail: "marker C is not read (see #23); the male lead is reported on p4 under mark B"}
+      - {instrument: Vocal, kind: vocal, voice: female, mark: D}
+      - {instrument: Vocal, kind: vocal, voice: male, page: 10, mark: H, xfail: "the male lead at H is not found; only the female lead at H + 4 is"}
+      - {instrument: Vocal, kind: vocal, voice: female, page: 10, mark: H}
+      - {instrument: Vocal, kind: vocal, voice: male, page: 15}
+      - {instrument: Vocal, kind: vocal, voice: female, page: 16}
 
   "ERGUE A CASA 10.22.26 - Piano":
     instruments: [Trumpet, Alto Sax, Trombone, Organ, Guitar, Electric Bass, Drums]
