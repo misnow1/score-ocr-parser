@@ -457,11 +457,15 @@ def fold_copies(candidates: list[Candidate]) -> list[Candidate]:
             )
             if c.instrument is None and lead:
                 out[i] = _folded(c, lead)
+    dropped: set[int] = set()
     for i, c in enumerate(out):
         for open_copy in open_systems.get((c.page, c.system_index), []):
+            if c.kind == "vocal lead" and c.text.lower() == open_copy.text.lower():
+                dropped.add(i)  # the copy over a voice staff is the same open marking
+                continue
             if c.kind != "vocal lead" and not c.named and c.instrument and _near(c, open_copy):
                 out[i] = _open_copy(c, open_copy.text)
-    return out
+    return [c for i, c in enumerate(out) if i not in dropped]
 
 
 def _near(c: Candidate, other: Candidate) -> bool:
