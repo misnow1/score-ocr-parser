@@ -14,6 +14,7 @@ from functools import cache
 from .data import load
 from .clefs import clef_ys, stray_labels
 from .models import Page, Token
+from .vocal import voice_staff
 
 LINE_TOLERANCE = 3.0
 EDGE_TOLERANCE = 3.0  # labels in one column share an edge to within this
@@ -136,6 +137,16 @@ def _ends_label(tok: Token, previous: Token, following: Token | None) -> bool:
     return False
 
 
+def _is_voice_part(label: list[Token], tok: Token) -> bool:
+    """The F or M closing a vocal staff label ("Voice Lead F"), which would
+    otherwise be cut as glyph residue."""
+    return (
+        label[0].text.lower() == "voice"
+        and label[-1].text.lower() in {"lead", "bck", "back"}
+        and tok.text in {"F", "M"}
+    )
+
+
 def _label_prefix(row: list[Token]) -> list[Token]:
     """The leading tokens of a line that form a staff label."""
     label = [row[0]]
@@ -144,6 +155,9 @@ def _label_prefix(row: list[Token]) -> list[Token]:
         if tok.x0 - label[-1].x1 > LABEL_GAP:
             break
         following = row[i + 1] if i + 1 < len(row) else None
+        if _is_voice_part(label, tok):
+            label.append(tok)
+            break
         if _ends_label(tok, label[-1], following):
             break
         label.append(tok)
@@ -211,6 +225,8 @@ def _is_title_like(key: str) -> bool:
     least two of them real words ("Synthetic Tune Two"), not abbreviations and
     chair numerals ("A. Sx. I & II" repeats too, and is a label)."""
     words = key.split()
+    if voice_staff(key):  # "Voice Lead F" repeats on every page and is a staff
+        return False
     return len(words) >= MIN_HEADER_WORDS and sum(len(w) >= 4 for w in words) >= 2
 
 

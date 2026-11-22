@@ -24,8 +24,13 @@ def load_expected(path: Path = EXPECTED) -> dict:
     return (yaml.safe_load(path.read_text()) or {}).get("scores") or {}
 
 
-def _kind_of(instrument: str | None) -> str:
-    return "vocal" if instrument == "Vocal" else "instrument"
+def _name_of(f) -> str | None:
+    """A vocal lead has no instrument; facts call it "Vocal"."""
+    return "Vocal" if f.kind == "vocal lead" else f.instrument
+
+
+def _kind_of(f) -> str:
+    return "vocal" if _name_of(f) == "Vocal" else "instrument"
 
 
 def _located(f, want: dict) -> bool:
@@ -44,11 +49,13 @@ def _feature_problem(report, want: dict) -> str | None:
     if shared and len(names) < 2:
         return f"shared feature {names[0]!r} needs several instruments"
     for name in names:
-        hits = [f for f in report.features if f.instrument == name and _located(f, want)]
+        hits = [f for f in report.features if _name_of(f) == name and _located(f, want)]
+        if "voice" in want:
+            hits = [f for f in hits if getattr(f, "voice", None) == want["voice"]]
         if "chair" in want:
             hits = [f for f in hits if getattr(f, "chair", None) == want["chair"]]
         if "kind" in want and not shared:
-            hits = [f for f in hits if _kind_of(f.instrument) == want["kind"]]
+            hits = [f for f in hits if _kind_of(f) == want["kind"]]
         if not hits:
             chair = f" chair {want['chair']}" if "chair" in want else ""
             return f"no {name} feature at {place}{chair}"
@@ -56,7 +63,7 @@ def _feature_problem(report, want: dict) -> str | None:
 
 
 def _absent_problem(report, want: dict) -> str | None:
-    hits = [f for f in report.features if f.instrument == want["instrument"] and _located(f, want)]
+    hits = [f for f in report.features if _name_of(f) == want["instrument"] and _located(f, want)]
     if not hits:
         return None
     return f"unexpected {want['instrument']} feature at page {hits[0].page} bar {hits[0].bar}"
@@ -79,7 +86,7 @@ def check_facts(report, facts: dict) -> list[str]:
     """Return a list of human-readable mismatches (empty when all facts hold).
 
     Keys: instruments (names or {name, xfail}); features (exact page, bar, mark,
-    kind, chair, one `instrument` or several `instruments`; `xfail: reason`
+    kind, chair, voice, one `instrument` or several `instruments`; `xfail: reason`
     marks a known gap); not_features (must be absent); max_features.
     Bars and pages match exactly.
     """
@@ -136,6 +143,15 @@ def test_kind_distinguishes_instrument_and_vocal(solos_report):
     assert check_facts(solos_report, feature_fact(instrument="Alto Sax", kind="instrument")) == []
     assert check_facts(solos_report, feature_fact(instrument="Alto Sax", kind="vocal"))
     assert check_facts(solos_report, feature_fact(instrument="Vocal", kind="instrument"))
+
+
+def test_vocal_lead_fact_matches_by_voice_and_location():
+    report = parse_score(FIXTURES / "finale_vocal_leads.pdf")
+    fact = {"instrument": "Vocal", "kind": "vocal", "page": 1, "bar": 1, "mark": "B"}
+    assert check_facts(report, feature_fact(**fact, voice="female")) == []
+    assert check_facts(report, feature_fact(**fact, voice="male")) == []
+    assert check_facts(report, feature_fact(**{**fact, "page": 2}, voice="female"))
+    assert check_facts(report, feature_fact(instrument="Vocal", kind="vocal", voice="female", page=1, bar=1, mark="C"))
 
 
 def test_shared_feature_needs_every_listed_instrument_at_the_same_place(solos_report):

@@ -11,9 +11,10 @@ from typing import Literal, NamedTuple
 
 from .layout import is_chord_symbol, running_headers
 from .instruments import Roster, resolve, resolve_against_first_system
-from .models import Feature, FeatureKind, Location, Page
+from .models import Feature, FeatureKind, Location, Page, Voice
 from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
 from .systems import Phrase, System, find_systems
+from .vocal import lead_text, voice_staff
 
 _KEYWORD = re.compile(r"\b(solos?|feature)\b", re.I)
 _REPEAT = re.compile(r"^\s*\d+\s*x\s*[-–:]?\s*", re.I)
@@ -37,6 +38,8 @@ BAR_EVIDENCE: dict[BarKind, float] = {
     "ocr": BAR_GUESSED,  # barlines cannot be counted on a scan
     "missing": 0.0,
 }
+VOICE_NAMED = 0.3  # a vocal lead whose text names the voice ("Female Lead")
+VOICE_FROM_STAFF = 0.15  # a bare "solo" above a Voice Lead F/M staff
 
 
 def _named_instrument(
@@ -92,6 +95,7 @@ class MergeKey:
     text: str  # empty when the instrument is named
     staff: str  # empty when the instrument is named
     chair: int | None = None  # a chair named in the text; chairs are separate features
+    voice: Voice | None = None  # vocal leads merge by voice
 
 
 # Where a chair came from, strongest first: the marking text ("GUITAR 1 SOLO"),
@@ -122,10 +126,14 @@ class Candidate:
     chair: int | None = None
     chair_from: "ChairFrom | None" = None
     chair_ambiguous: bool = False  # the staff is shared by several chairs
+    voice: Voice | None = None  # vocal leads only
+    section: str | None = None  # vocal leads only
 
     @property
     def key(self) -> MergeKey:
         """Copies of one solo share it."""
+        if self.kind == "vocal lead":
+            return MergeKey(self.kind, None, "", "", None, self.voice)
         if self.instrument:
             return MergeKey(
                 self.kind, self.instrument, "", "",
@@ -232,6 +240,67 @@ def _candidate(
     )
 
 
+class _Dropped:
+    """Marker: a solo over a backing vocal staff, which is no feature."""
+
+
+_DROPPED = _Dropped()
+
+
+def _vocal_candidate(
+    context: SystemContext,
+    phrase: Phrase,
+    text: str,
+    voice: Voice | None,
+    section: str | None,
+    from_text: bool,
+) -> Candidate:
+    """A vocal lead: its voice named by the text, or taken from the Voice Lead staff."""
+    system = context.system
+    reading = system.bar_at(phrase.x0)
+    if from_text:
+        evidence, why = VOICE_NAMED, "voice named in text"
+    else:
+        evidence, why = VOICE_FROM_STAFF, "voice taken from the Voice Lead staff below"
+    reasons = ["matched vocal lead wording", why, reading.reason]
+    return Candidate(
+        kind="vocal lead",
+        text=text,
+        instrument=None,
+        evidence=BASE + evidence,
+        reasons=reasons,
+        page=system.page,
+        system_index=context.index,
+        row=system.row,
+        opens_row=system.opens_row(phrase.x0),
+        x=phrase.x0,
+        bar=reading.bar,
+        bar_kind=reading.kind,
+        mark=current_mark(context.systems, system, phrase.x0),
+        staff="",
+        voice=voice,
+        section=section,
+    )
+
+
+def _vocal_wording(
+    context: SystemContext, phrase: Phrase, text: str, roster: Roster
+) -> "Candidate | _Dropped | None":
+    """The vocal lead a phrase marks, else None: "Female Lead Verse 1", or a
+    bare solo above a Voice Lead staff. A solo above a backing vocal staff is
+    printed for the lead text beside it and is dropped."""
+    lead = lead_text(text)
+    if lead:
+        return _vocal_candidate(context, phrase, text, lead[0], lead[1], True)
+    hit = _match(text)
+    staff = voice_staff(context.system.staff_for(phrase.yc).label)
+    if hit is None or staff is None or _named_instrument(hit[1], roster, []):
+        return None
+    if staff[0] == "backing":
+        return _DROPPED
+    return _vocal_candidate(context, phrase, text, staff[1], None, False)
+
+
 def collect_candidates(
     systems: list[System], roster: Roster
 ) -> tuple[list[Candidate], list[str]]:
@@ -241,15 +310,20 @@ def collect_candidates(
     for index, system in enumerate(systems):
         for phrase in system.texts:
             text = strip_chords(phrase.text)
+            context = SystemContext(systems, index, roster)
+            vocal = _vocal_wording(context, phrase, text, roster)
+            if vocal is _DROPPED:
+                continue
+            if vocal:
+                candidates.append(vocal)
+                continue
             hit = _match(text)
             if hit is None:
                 continue
             notes: list[str] = []
             kind, prefix = hit
             candidates.append(
-                _candidate(
-                    kind, prefix, text, SystemContext(systems, index, roster), phrase, notes
-                )
+                _candidate(kind, prefix, text, context, phrase, notes)
             )
             for note in notes:
                 warnings[f"Page {system.page}: solo/feature '{text}': {note}"] = None
@@ -321,6 +395,8 @@ def build_feature(group: list[Candidate]) -> Feature:
         confidence=round(lead.confidence, 2),
         reasons=reasons,
         locations=_locations(group),
+        voice=lead.voice,
+        section=next((c.section for c in group if c.section), None),
     )
 
 
