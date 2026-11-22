@@ -69,7 +69,7 @@ def test_vocal_inferred_from_male_alone_scores_lower_than_named(tmp_path):
     assert inferred.confidence < named.confidence
 
 
-def test_feature_never_names_an_instrument_the_instrumentation_lacks(tmp_path):
+def test_missing_instrument_is_a_possible_feature_never_a_confident_one(tmp_path):
     pdf = make_score(
         tmp_path / "t.pdf",
         [(150, ["Alto Saxophone 1", "Drums"])],
@@ -77,7 +77,8 @@ def test_feature_never_names_an_instrument_the_instrumentation_lacks(tmp_path):
     )
     report = parse_score(pdf)
     (feature,) = report.features
-    assert feature.instrument != "Trombone"
+    assert feature.instrument == "Trombone"  # named by the text; the staff is not the soloist's
+    assert feature.confidence < 0.8
     assert any("Trombone" in w and "first-system" in w for w in report.warnings)
 
 
