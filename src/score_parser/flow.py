@@ -12,7 +12,36 @@ from .models import Feature, FlowStep
 LOW_CONFIDENCE = 0.8  # below this a step gets a TODO(score-parser) comment
 
 
+def _named(instrument: str, chair: int | None) -> str:
+    return f"{instrument} {chair}" if chair else instrument
+
+
+def _shared_step(f: Feature) -> FlowStep:
+    """One step naming every instrument (and chair) the marking is shared by."""
+    names = [_named(f.instrument or "Unknown instrument", f.chair)]
+    names += [_named(p.instrument, p.chair) for p in f.shared_with]
+    ambiguous = [n for n, c in zip(names, [f.chair_ambiguous, *(p.chair_ambiguous for p in f.shared_with)]) if c]
+    section = f"{', '.join(names[:-1])} and {names[-1]} {f.kind}"
+    section += f" ({f.rehearsal_mark})" if f.rehearsal_mark else ""
+    where = [f"page {f.page}"]
+    if f.bar is not None:
+        where.append(f"bar {f.bar}")
+    if f.rehearsal_mark:
+        where.append(f"rehearsal {f.rehearsal_mark}")
+    if ambiguous:
+        where.append(f"chair ambiguous for {', '.join(ambiguous)} (shared staff)")
+    note = f"{', '.join(where)}; confidence {f.confidence:g}"
+    todo = None
+    if f.confidence < LOW_CONFIDENCE:
+        todo = f"low confidence ({f.confidence:g}): " + "; ".join(f.reasons)
+    elif ambiguous:
+        todo = "chair ambiguous: " + "; ".join(f.reasons)
+    return FlowStep(section, ", ".join(n.lower() for n in names), note, todo)
+
+
 def _step(f: Feature) -> FlowStep:
+    if f.shared_with:
+        return _shared_step(f)
     vocal = f.kind == "vocal lead"
     if vocal:
         who = f"{f.voice.capitalize()} vocal lead" if f.voice else "Vocal lead"

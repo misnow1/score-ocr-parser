@@ -33,6 +33,11 @@ def _kind_of(f) -> str:
     return "vocal" if _name_of(f) == "Vocal" else "instrument"
 
 
+def _names_of(f) -> list[str | None]:
+    """Every instrument a feature names: the lead one and those sharing it."""
+    return [_name_of(f), *(p.instrument for p in getattr(f, "shared_with", []))]
+
+
 def _located(f, want: dict) -> bool:
     """Exact match on the keys the fact gives: page, bar and rehearsal mark."""
     return all(
@@ -49,7 +54,7 @@ def _feature_problem(report, want: dict) -> str | None:
     if shared and len(names) < 2:
         return f"shared feature {names[0]!r} needs several instruments"
     for name in names:
-        hits = [f for f in report.features if _name_of(f) == name and _located(f, want)]
+        hits = [f for f in report.features if name in _names_of(f) and _located(f, want)]
         if "voice" in want:
             hits = [f for f in hits if getattr(f, "voice", None) == want["voice"]]
         if "chair" in want:
