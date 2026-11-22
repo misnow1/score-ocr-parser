@@ -41,7 +41,6 @@ def chairs(report):
         ("Synth.", "Synthesizer"),
         ("Sop. Sax.", "Soprano Sax"),
         ("S.Bells", "Sleigh Bells"),
-        ("VCLS", "Lead Vocal"),
         ("Guitars", "Guitar"),
         ("Ac. Gtr.", "Guitar"),
     ],
@@ -84,8 +83,39 @@ def test_combined_label_with_unknown_part_stays_unrecognised(tmp_path):
     assert any("not recognised" in w for w in report.warnings)
 
 
-@pytest.mark.parametrize("label", ["SATB", "Choir", "Voice Lead", "Voice bck", "A.", "Bar."])
+@pytest.mark.parametrize("label", ["SATB", "Choir", "Voice Lead", "Voice bck", "VCLS", "A.", "Bar."])
 def test_choir_and_ambiguous_labels_stay_unrecognised(tmp_path, label):
     pdf = make_score(tmp_path / "s.pdf", [(150, FIRST), (500, [label])])
     report = parse_score(pdf)
     assert any(f"'{label}' is not recognised" in w for w in report.warnings)
+
+
+def test_combined_label_part_recurring_later_is_accepted_without_warning(tmp_path):
+    first = ["Alto Saxophone 1", "Trombone 1-4", "Drums", "Piano", "Guitar"]
+    systems = [(150, first), (400, ["Trb. 3, Tba."]), (600, ["Trb. 3, Tba."])]
+    report = parse_score(make_score(tmp_path / "s.pdf", systems))
+    assert report.warnings == []
+    assert "Tuba" in chairs(report)
+
+
+def test_combined_label_with_recurring_part_still_warns_for_chair_outside_first_system(tmp_path):
+    first = ["Alto Saxophone 1", "Trombone 1-2", "Drums", "Piano", "Guitar"]
+    systems = [(150, first), (400, ["Trb. 3, Tba."]), (600, ["Trb. 3, Tba."])]
+    report = parse_score(make_score(tmp_path / "s.pdf", systems))
+    assert any("chairs [3]" in w and "Trombone" in w for w in report.warnings)
+    assert chairs(report)["Trombone"] == [1, 2]
+
+
+def test_one_off_combined_label_part_missing_from_first_system_still_warns(tmp_path):
+    first = ["Trombone 1-4", "Drums", "Piano"]
+    report = parse_score(make_score(tmp_path / "s.pdf", [(150, first), (500, ["Trb. 3, Tba."])]))
+    assert any("Tuba" in w and "not in the first-system" in w for w in report.warnings)
+
+
+def test_chair_range_resolves_from_the_label_itself(tmp_path):
+    first = ["Trombone 1-2", "Drums", "Piano"]
+    ok = parse_score(make_score(tmp_path / "ok.pdf", [(150, first), (500, ["Trb. 1-2"])]))
+    assert ok.warnings == []
+    assert chairs(ok)["Trombone"] == [1, 2]
+    wide = parse_score(make_score(tmp_path / "wide.pdf", [(150, first), (500, ["Trb. 1-3"])]))
+    assert any("chairs [1, 2, 3]" in w for w in wide.warnings)
