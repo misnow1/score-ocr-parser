@@ -13,7 +13,7 @@
 - **First system**: the label stack on the first page that has any resolving label, with the most labels that resolve.
 - **System**: one row of staves across the page.
 - **Staff band**: the vertical position of one staff in a system, taken from its label.
-- **Bar**: a measure, identified by the bar number printed above the top staff. A feature's bar is the nearest number at or left of its text.
+- **Bar**: a measure, identified by the bar number printed above the top staff. A feature's bar is the nearest number at or left of its text. Only a number in the bar row (just above the top staff) that fits the rising sequence counts; time signatures, headers and triplet numbers are not bars.
 - **Rehearsal mark**: a single capital letter or a section word ("VERSE") above a system. A feature reports the latest mark at or before it.
 - **Instrumentation**: the instruments on the first system (full names), with chairs and doublings. Features may only name instruments in it.
 - **Recurring instrument**: an instrument the first system lacks that labels two or more later systems. It joins the instrumentation; a one-off later label for a missing instrument still warns.
