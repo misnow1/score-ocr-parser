@@ -1,0 +1,4 @@
+title: Jingle Bells
+kind: song
+flow:
+  - { section: "Synthetic placeholder", type: band }

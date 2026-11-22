@@ -1,0 +1,5 @@
+# Alternative titles for planner number slugs (from the planner glossary/spec).
+# Editable data: add a slug and its other names; matching ignores case and "the".
+aliases:
+  first-noel: [First Nowell]
+  superstition: [Super Christmas]
