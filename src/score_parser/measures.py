@@ -18,8 +18,11 @@ X_SLACK = 2.0  # horizontal tolerance when comparing positions
 PAGE_NUMBER_MARGIN = 0.9  # right margin starts at this fraction of the page width
 BAR_ROW_REACH = 60.0  # how far above the top staff a bar number may sit
 BAR_ROW_MIN = 6.0  # a bar number sits above the staff; a time signature sits on it
+BAR_ROW_BELOW_MIN = 4.0  # numbers printed under a system start this far under its bottom staff...
+BAR_ROW_BELOW_REACH = 25.0  # ...and end this far under it
 BARLINE_MERGE = 4.0  # rules this close are one barline (double and final barlines)
 SPAN_TOLERANCE = 4.0  # slack when asking whether a drawn rule crosses a staff
+IN_BAR_MARGIN = 6.0  # a number this far clear of both barlines of a bar sits inside it, not on a barline
 SNAP_REACH = 25.0  # a bar number sits within this of the barline it numbers
 _NUMBER = re.compile(r"^\d{1,3}$")
 _CAPITAL = re.compile(r"^[A-Z]$")
@@ -95,8 +98,13 @@ def share_barlines(rules: list[tuple[float, float, float]], upper: float, lower:
 
 
 def snap_to_barline(barlines: list[float], x0: float, x1: float) -> int | None:
-    """Index of the barline a bar number sits on (numbers are centred on it or
-    start just right of it), or None when none is near."""
+    """Index of the barline that starts the bar a number numbers, or None when
+    none is near. Numbers are centred on a barline or start just right of it
+    (the nearest barline); some scores centre each number inside its bar (the
+    barline to its left, when the number is clear of both)."""
+    inside = max(0, bisect_right(barlines, x0) - 1)
+    if inside + 1 < len(barlines) and x0 - barlines[inside] >= IN_BAR_MARGIN and barlines[inside + 1] - x1 >= IN_BAR_MARGIN:
+        return inside
     centre = (x0 + x1) / 2
     best = min(range(len(barlines)), key=lambda i: abs(barlines[i] - centre), default=None)
     if best is None or abs(barlines[best] - centre) > SNAP_REACH:
@@ -233,6 +241,16 @@ def current_mark(systems: list[HasMarks], system: HasMarks, x: float) -> str | N
     return current
 
 
+def below_bottom(staves_bottom: float, yc: float) -> bool:
+    """Whether a text line at yc sits in the band of bar numbers under a staff at `staves_bottom`."""
+    return staves_bottom + BAR_ROW_BELOW_MIN <= yc <= staves_bottom + BAR_ROW_BELOW_REACH
+
+
+def above_top(top: float, yc: float) -> bool:
+    """Whether a text line at yc sits in the band of bar numbers above a staff at `top`."""
+    return top - BAR_ROW_REACH <= yc <= top - BAR_ROW_MIN
+
+
 def page_number_zone(page: Page, label_right: float) -> Callable[[str, float], bool]:
     """Whether a number at x0 sits where a page number does: in the label
     column or the right margin. Only a number equal to the page's own is dropped."""
@@ -244,16 +262,22 @@ def page_number_zone(page: Page, label_right: float) -> Callable[[str, float], b
 
 
 def read_phrase(
-    phrase: list[Token], top: float, is_page_number: Callable[[str, float], bool]
+    phrase: list[Token], top: float, is_page_number: Callable[[str, float], bool], bottom: float | None = None
 ) -> tuple[tuple[float, int, float] | None, tuple[float, str] | None, list[Token] | None]:
     """Split one phrase near a system whose top staff is at `top` into
-    (bar number, rehearsal mark, remaining text phrase). A glued "29ALTO SOLO"
+    (bar number, rehearsal mark, remaining text phrase). With `bottom` (the
+    bottom staff's y), a number counts when it sits just under that staff, not
+    above the top one. A glued "29ALTO SOLO"
     yields the bar and the rest; a lone number yields only a bar (or nothing)."""
     yc = phrase[0].yc
     bar = None
     if _NUMBER.match(phrase[0].text):
         first = phrase[0]
-        fits = top - BAR_ROW_REACH <= yc <= top - BAR_ROW_MIN and not is_page_number(first.text, first.x0)
+        if bottom is None:
+            in_band = top - BAR_ROW_REACH <= yc <= top - BAR_ROW_MIN
+        else:
+            in_band = bottom + BAR_ROW_BELOW_MIN <= yc <= bottom + BAR_ROW_BELOW_REACH
+        fits = in_band and not is_page_number(first.text, first.x0)
         if fits:
             bar = (first.x0, int(first.text), first.x1)
         if len(phrase) == 1:

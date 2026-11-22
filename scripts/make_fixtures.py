@@ -428,6 +428,26 @@ def sparse_bar_numbers(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def bar_numbers_below(music_font: Path, out: Path) -> None:
+    """Bar numbers printed under each system, below its bottom staff, one per bar,
+    centred in the bar rather than on its barline (far from the staff of the
+    system underneath). A row of triplet 3s sits
+    inside the first system and is not a bar number."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Below Tune", fontname="helv", fontsize=24)
+    for top, labels, first, texts in (
+        (150, FULL, 41, [(345, ys_at(150, 2) - 12, "TBN SOLO", 9), (250, 190, "3 3 3", 7)]),
+        (450, ABBR, 45, [(145, ys_at(450, 0) - 12, "ALTO SOLO", 9)]),
+    ):
+        _system(page, top, labels, music_font, texts)
+        _barlines(page, top, len(labels), BAR_XS)
+        y = ys_at(top, len(labels) - 1) + 16
+        for i, x in enumerate(BAR_XS[:-1]):
+            page.insert_text((x + 46, y), str(first + i), fontname="helv", fontsize=7)
+    doc.save(out)
+
+
 RA_CUE = ["Piano", "Bass", "Drum Set"]
 RA_FULL = [
     "Piccolo",
@@ -707,6 +727,7 @@ def main() -> None:
         chair_solos(font, OUT / "finale_chair_solos.pdf")
         non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
         sparse_bar_numbers(font, OUT / "finale_sparse_bar_numbers.pdf")
+        bar_numbers_below(font, OUT / "finale_bar_numbers_below.pdf")
         vocal_leads(font, OUT / "finale_vocal_leads.pdf")
         voice_staves(font, OUT / "finale_voice_staves.pdf")
         distinct_solos(font, OUT / "finale_distinct_solos.pdf")
