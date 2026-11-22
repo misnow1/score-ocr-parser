@@ -1,36 +1,24 @@
-"""Layout stage: systems, staff bands, bar numbers, rehearsal marks and text phrases.
+"""Layout stage: systems and their text phrases.
 
-Staff bands come from the label column at the left margin; each stack of labels
-(split at a large vertical gap) is one system.
+Each stack of labels at the left margin (split at a large vertical gap) is one
+system. Staff assignment lives in `staves`, bar and mark lookup in `measures`.
 """
 
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from functools import cache
 
-from .layout import LINE_TOLERANCE, label_stacks, label_token_ids, label_tokens, lines_without
-from .data import load
+from .layout import label_stacks, label_token_ids, label_tokens, lines_without
+from .measures import bar_at, page_number_zone, read_phrase
 from .models import Page, Token
+from .staves import Staff, owning_system, staff_at
 
 PHRASE_GAP = 20.0  # horizontal gap that separates two annotations on one line
-X_SLACK = 2.0  # horizontal tolerance when comparing positions
-PAGE_NUMBER_MARGIN = 0.9  # right margin starts at this fraction of the page width
-BAR_ROW_REACH = 60.0  # how far above the top staff a bar number may sit
-_NUMBER = re.compile(r"^\d{1,3}$")
-_CAPITAL = re.compile(r"^[A-Z]$")
 
 
 @dataclass
 class Phrase:
     text: str
     x0: float
-    yc: float
-
-
-@dataclass
-class Staff:
-    label: str
     yc: float
 
 
@@ -44,22 +32,10 @@ class System:
     texts: list[Phrase] = field(default_factory=list)
 
     def staff_for(self, yc: float) -> Staff:
-        """The staff a text above a staff belongs to: the first one at or below it."""
-        return next((s for s in self.staves if s.yc >= yc - LINE_TOLERANCE), self.staves[-1])
+        return staff_at(self.staves, yc)
 
     def bar_at(self, x: float) -> tuple[int | None, bool]:
-        """(bar number, certain). The last bar number at or left of x; when the
-        text sits left of every bar number, the first bar with certain False."""
-        before = [b for bx, b in self.bars if bx <= x + X_SLACK]
-        if before:
-            return before[-1], True
-        return (self.bars[0][1], False) if self.bars else (None, True)
-
-
-@cache
-def _rehearsal_words() -> frozenset[str]:
-    data = load("rehearsal_words.yaml")
-    return frozenset(w.lower() for w in data["rehearsal_words"])
+        return bar_at(self.bars, x)
 
 
 def _phrases(row: list[Token]) -> list[list[Token]]:
@@ -83,48 +59,22 @@ def find_systems(page: Page, headers: frozenset[str] = frozenset()) -> list[Syst
         for i, stack in enumerate(stacks)
     ]
     label_right = max(t.x1 for t in label_tokens(stacks))
-    is_page_number = _page_number_zone(page, label_right)
+    is_page_number = page_number_zone(page, label_right)
     for row in other_rows:
-        owner = min(systems, key=lambda s: _distance(s, row[0].yc))
+        owner = owning_system(systems, row[0].yc)
         _place(owner, row, is_page_number)
     return systems
-
-
-def _page_number_zone(page: Page, label_right: float) -> Callable[[str, float], bool]:
-    """Whether a number at x0 sits where a page number does: in the label
-    column or the right margin. Only a number equal to the page's own is dropped."""
-
-    def is_page_number_here(text: str, x0: float) -> bool:
-        return text == str(page.number) and (x0 < label_right or x0 > PAGE_NUMBER_MARGIN * page.width)
-
-    return is_page_number_here
-
-
-def _distance(system: System, yc: float) -> float:
-    """Zero inside the system's staff span; text above a system belongs to it."""
-    top, bottom = system.staves[0].yc, system.staves[-1].yc
-    if yc > bottom:
-        return yc - bottom + 1000  # below a system: prefer the system underneath
-    return max(0.0, top - yc)
 
 
 def _place(system: System, row: list[Token], is_page_number: Callable[[str, float], bool]) -> None:
     top = system.staves[0].yc
     for phrase in _phrases(row):
-        yc = phrase[0].yc
-        if _NUMBER.match(phrase[0].text) and len(phrase) > 1:
-            system.bars.append((phrase[0].x0, int(phrase[0].text)))  # glued "29ALTO SOLO"
-            phrase = phrase[1:]
-        elif len(phrase) == 1 and _NUMBER.match(phrase[0].text):
-            if top - BAR_ROW_REACH <= yc <= top and not is_page_number(
-                phrase[0].text, phrase[0].x0
-            ):
-                system.bars.append((phrase[0].x0, int(phrase[0].text)))
-            continue
-        text = " ".join(t.text for t in phrase)
-        if yc < top and (_CAPITAL.match(text) or text.lower() in _rehearsal_words()):
-            system.marks.append((phrase[0].x0, text))
-            continue
-        system.texts.append(Phrase(text, phrase[0].x0, yc))
+        bar, mark, rest = read_phrase(phrase, top, is_page_number)
+        if bar:
+            system.bars.append(bar)
+        if mark:
+            system.marks.append(mark)
+        if rest:
+            system.texts.append(Phrase(" ".join(t.text for t in rest), rest[0].x0, rest[0].yc))
     system.bars.sort()
     system.marks.sort()

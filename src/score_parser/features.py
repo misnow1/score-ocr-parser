@@ -12,7 +12,8 @@ from typing import NamedTuple
 from .layout import is_chord_symbol, running_headers
 from .instruments import Roster, resolve_against_first_system
 from .models import Feature, FeatureKind, Location, Page
-from .systems import X_SLACK, Phrase, System, find_systems
+from .measures import current_mark
+from .systems import Phrase, System, find_systems
 
 _KEYWORD = re.compile(r"\b(solos?|feature)\b", re.I)
 _REPEAT = re.compile(r"^\s*\d+\s*x\s*[-–:]?\s*", re.I)
@@ -63,18 +64,6 @@ def _match(text: str) -> tuple[FeatureKind, str] | None:
         return None
     kind: FeatureKind = "feature" if m.group(1).lower() == "feature" else "solo"
     return kind, _VAMP_FOR.sub("", _REPEAT.sub("", text[: m.start()]))
-
-
-def _current_mark(systems: list[System], system: System, x: float) -> str | None:
-    """Latest rehearsal mark at or before (page, system, x) in reading order."""
-    current = None
-    for s in systems:
-        if (s.page, s.index) > (system.page, system.index):
-            break
-        for mx, text in s.marks:
-            if (s.page, s.index) < (system.page, system.index) or mx <= x + X_SLACK:
-                current = text
-    return current
 
 
 @dataclass(frozen=True)
@@ -191,7 +180,7 @@ def _candidate(
         x=phrase.x0,
         bar=bar,
         bar_certain=certain,
-        mark=_current_mark(context.systems, system, phrase.x0),
+        mark=current_mark(context.systems, system, phrase.x0),
         staff=staff_label,
     )
 
