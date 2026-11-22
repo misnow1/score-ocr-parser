@@ -22,6 +22,8 @@ _VAMP_FOR = re.compile(r"^\s*vamp\s+for\s+", re.I)
 _TEXT_CHAIR = re.compile(r"\s(\d)\s*$")  # "GUITAR 1 " before the solo wording
 # The vocal word must sit directly before the solo wording ("male vocal solo").
 _VOCAL_TIED = re.compile(r"\b(?:(male|female)(?:\s+(?:vocals?|vox))?|vocals?|vox)\s*$", re.I)
+# "Tenor Solo" over a choir staff names a voice part, not the sax or the bass.
+_VOICE_PART_TIED = re.compile(r"\b(?:soprano|alto|tenor|baritone|bass)s?\s*$", re.I)
 
 # Confidence: a base for matching the wording, plus evidence for the instrument and bar.
 BASE = 0.5
@@ -39,6 +41,7 @@ BAR_EVIDENCE: dict[BarKind, float] = {
     "missing": 0.0,
 }
 CHORD_ONLY_WORDING = 0.1  # penalty: the wording was a chord plus a bare "Solo"
+CHORD_ONLY_REASON = "wording was only chord text plus 'Solo'"
 INSTRUMENT_ABSENT = 0.1  # named in the text but not in the instrumentation: a possible feature
 VOICE_NAMED = 0.3  # a vocal lead whose text names the voice ("Female Lead")
 VOICE_FROM_STAFF = 0.15  # a bare "solo" above a Voice Lead F/M staff
@@ -148,14 +151,17 @@ class Candidate:
     slot: int = -1  # position of the staff below the text in its system
     staff_count: int = 0  # staves in that system
     named: bool = False  # the instrument comes from the marking text
-    voice_system_index: int | None = None  # vocal leads only: position among the systems that have voice staves
+    voice_system_index: int | None = None  # vocal leads on a voice system: position among the systems that have voice staves
 
-    @property
-    def neighbour_index(self) -> int:
-        """Where the system sits for deciding what is next to what. A vocal lead is
-        printed on the voice systems alone, so the rhythm-section system between
-        two of them (a page's second stack) does not separate them."""
-        return self.system_index if self.voice_system_index is None else self.voice_system_index
+    def systems_from(self, other: "Candidate") -> int:
+        """How many systems this one is after `other`. Two vocal leads on voice
+        systems count the voice systems alone, so the rhythm-section system
+        between them (a page's second stack) does not separate them; with a
+        lead off the voice systems (a text lead on a score with no voice staff)
+        every system counts."""
+        if self.voice_system_index is not None and other.voice_system_index is not None:
+            return self.voice_system_index - other.voice_system_index
+        return self.system_index - other.system_index
 
     @property
     def key(self) -> MergeKey:
@@ -203,6 +209,7 @@ def _candidate(
     chair = None
     chair_from: ChairFrom | None = None
     ambiguous = False
+    named_in_text = False  # a possible feature: the text names an instrument the score lacks
     staff_label = staff.label
     named = _named_instrument(prefix, roster, notes)
     if named and not named[1]:
@@ -227,6 +234,7 @@ def _candidate(
         # the soloist's (copies are printed above every staff).
         instrument = _absent_instrument(prefix)
         staff_label = ""
+        named_in_text = instrument is not None
         if instrument:
             evidence += INSTRUMENT_ABSENT
             reasons.append(
@@ -278,7 +286,7 @@ def _candidate(
         chair_ambiguous=ambiguous,
         slot=next((i for i, s in enumerate(system.staves) if s is staff), -1),
         staff_count=len(system.staves),
-        named=bool(named and not named[1]),
+        named=bool(named and not named[1]) or named_in_text,
     )
 
 
@@ -319,8 +327,10 @@ def _vocal_candidate(
         staff="",
         voice=voice,
         section=section,
-        voice_system_index=sum(
-            any(st.voice for st in sys.staves) for sys in context.systems[: context.index + 1]
+        voice_system_index=(
+            sum(any(st.voice for st in sys.staves) for sys in context.systems[: context.index + 1])
+            if any(st.voice for st in system.staves)
+            else None
         ),
     )
 
@@ -337,7 +347,9 @@ def _vocal_wording(
         return _vocal_candidate(context, phrase, text, lead[0], lead[1], VOICE_NAMED, "voice named in text")
     hit = _match(text)
     below = context.system.staff_for(phrase.yc)
-    if hit is None or not below.voice or _named_instrument(hit[1], roster, []):
+    if hit is None or hit[0] != "solo" or not below.voice:
+        return None
+    if _named_instrument(hit[1], roster, []) and not _VOICE_PART_TIED.search(hit[1]):
         return None
     staff = voice_staff(below.label)
     if staff is None:
@@ -361,6 +373,10 @@ def collect_candidates(
             text = strip_chords(phrase.text)
             chord_only = text != phrase.text and _match(text) == ("solo", "")
             if chord_only and sum(map(count_chords, phrase.text.split())) > 1:
+                warnings[
+                    f"Page {system.page}: '{phrase.text}' dropped: several chords plus a bare 'Solo' "
+                    "read as a chart label, not a feature (review)"
+                ] = None
                 continue  # several chords over a bare "Solo": a chart label, not a feature
             context = SystemContext(systems, index, roster)
             vocal = _vocal_wording(context, phrase, text, roster)
@@ -377,7 +393,7 @@ def collect_candidates(
             candidate = _candidate(kind, prefix, text, context, phrase, notes)
             if chord_only:  # one chord plus "Solo": kept, but only as a possible feature
                 candidate.evidence -= CHORD_ONLY_WORDING
-                candidate.reasons.append("wording was only chord text plus 'Solo'")
+                candidate.reasons.append(CHORD_ONLY_REASON)
             candidates.append(candidate)
             for note in notes:
                 warnings[f"Page {system.page}: solo/feature '{text}': {note}"] = None
@@ -393,7 +409,7 @@ def _is_reminder_of(c: Candidate, group: list[Candidate]) -> bool:
     it is on the same or the next system, in the first bar of a later row,
     on no other chair (on a later system), and no more than a row of bars on."""
     last = group[-1]
-    if c.neighbour_index - last.neighbour_index > 1:
+    if c.systems_from(last) > 1:
         return False
     if c.row != last.row and not c.opens_row:
         return False
@@ -408,7 +424,10 @@ def _is_reminder_of(c: Candidate, group: list[Candidate]) -> bool:
     return c.bar is None or last.bar is None or abs(c.bar - last.bar) <= MAX_REMINDER_GAP
 
 
-MIN_OPEN_COPIES = 4  # copies of one marking on one system that make it a marking over every staff
+MIN_OPEN_COPIES = 4  # copies of one marking at one place on one system that make it a marking over every staff
+# A bare "Solo" that happens to coincide over a few staves is one shared feature
+# (#27); only over all but at most one staff of the system is it an open solo.
+BARE_OPEN_SHARE = 0.75
 _STAFF_REASONS = ("instrument taken", "chair", "staff '", "possible feature", "named instrument")
 
 
@@ -419,7 +438,7 @@ def _open_copy(c: Candidate, text: str) -> Candidate:
     reasons.append("generic marking printed over every staff: an open solo, instrument unknown")
     return replace(
         c, text=text, instrument=None, staff="", chair=None, chair_from=None, chair_ambiguous=False,
-        evidence=BASE, reasons=reasons,
+        evidence=BASE - (CHORD_ONLY_WORDING if CHORD_ONLY_REASON in c.reasons else 0.0), reasons=reasons,
     )
 
 
@@ -429,26 +448,50 @@ def _folded(c: Candidate, lead: Candidate) -> Candidate:
     return replace(c, instrument=lead.instrument, staff="", reasons=reasons)
 
 
+def _is_open(copies: list[Candidate]) -> bool:
+    """Whether copies of one wording at one place are a marking over the staves
+    of the system rather than markings for the instruments below them: no
+    instrument named in the text (a possible feature counts as named), at least
+    four copies, and more than half of the staves (a bare "Solo", which also
+    reads as one shared feature, needs all but one)."""
+    if any(c.named for c in copies):
+        return False
+    staves, count = len({c.slot for c in copies}), copies[0].staff_count
+    if staves < MIN_OPEN_COPIES:
+        return False
+    if _match(copies[0].text) == ("solo", ""):
+        return staves >= BARE_OPEN_SHARE * count
+    return staves * 2 > count
+
+
+def _same_place(candidates: list[Candidate], indices: list[int]) -> list[list[int]]:
+    """Split the copies of one wording on one system into those at one place
+    (x within SHARED_X_TOLERANCE of the one before, left to right)."""
+    clusters: list[list[int]] = []
+    for i in sorted(indices, key=lambda i: candidates[i].x):
+        if clusters and candidates[i].x - candidates[clusters[-1][-1]].x <= SHARED_X_TOLERANCE:
+            clusters[-1].append(i)
+        else:
+            clusters.append([i])
+    return clusters
+
+
 def fold_copies(candidates: list[Candidate]) -> list[Candidate]:
     """Copies of one marking across the staves of one system, whether or not
-    they name an instrument. A generic wording (no instrument in its text) on
-    more than half of the staves is an open solo: every copy loses its staff's
-    instrument. Otherwise copies with no instrument join a copy that has one,
-    at the same place."""
+    they name an instrument. A generic wording (no instrument in its text)
+    printed at one place over most of the staves is an open solo (see
+    `_is_open`): every copy loses its staff's instrument. Otherwise copies with
+    no instrument join a copy that has one, at the same place."""
     wide: dict[tuple[int, int, str], list[int]] = {}
     for i, c in enumerate(candidates):
         if c.kind != "vocal lead":
             wide.setdefault((c.page, c.system_index, c.text.lower()), []).append(i)
     out = list(candidates)
     open_systems: dict[tuple[int, int], list[Candidate]] = {}
-    for members in wide.values():
+    places = [place for members in wide.values() for place in _same_place(candidates, members)]
+    for members in places:
         copies = [candidates[i] for i in members]
-        slots = {c.slot for c in copies}
-        if (
-            not any(c.named for c in copies)
-            and len(slots) >= MIN_OPEN_COPIES
-            and len(slots) * 2 > copies[0].staff_count
-        ):
+        if _is_open(copies):
             for i in members:
                 out[i] = _open_copy(candidates[i], copies[0].text)
             open_systems.setdefault((copies[0].page, copies[0].system_index), []).append(out[members[0]])
@@ -476,7 +519,11 @@ def fold_copies(candidates: list[Candidate]) -> list[Candidate]:
 
 
 def _near(c: Candidate, other: Candidate) -> bool:
-    return c.bar is None or other.bar is None or abs(c.bar - other.bar) <= MAX_REMINDER_GAP
+    """Whether `c` is the open marking's copy: within a row of bars of it, or,
+    when a bar is unknown (a scan, a page with no bar numbers), at the same place."""
+    if c.bar is None or other.bar is None:
+        return abs(c.x - other.x) <= SHARED_X_TOLERANCE
+    return abs(c.bar - other.bar) <= MAX_REMINDER_GAP
 
 
 def _restated(c: Candidate, latest: dict[MergeKey, list[Candidate]]) -> list[Candidate] | None:

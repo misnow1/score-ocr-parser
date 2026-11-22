@@ -104,9 +104,14 @@ def find_systems(page: Page, headers: frozenset[str] = frozenset()) -> list[Syst
 def _numbered_under(systems: list[System], owner: System, row: list[Token]) -> System | None:
     """The system whose bottom staff a line of bare numbers sits just under, when
     the line is not in the band above its owner (some scores print bar numbers
-    under the system, where text belongs to the system beneath)."""
+    under the system, where text belongs to the system beneath). A row of bar
+    numbers has two or more numbers that rise left to right: a lone digit (a
+    time signature) or repeats (tuplet 3s) under a staff are not bar numbers."""
     yc = row[0].yc
     if not all(t.text.isdigit() for t in row) or above_top(owner.staves[0].yc, yc):
+        return None
+    numbers = [int(t.text) for t in sorted(row, key=lambda t: t.x0)]
+    if len(numbers) < 2 or any(a >= b for a, b in zip(numbers, numbers[1:])):
         return None
     return next((s for s in systems if below_bottom(s.staves[-1].yc, yc)), None)
 

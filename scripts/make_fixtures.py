@@ -238,9 +238,9 @@ def chord_text_solos(music_font: Path, out: Path) -> None:
     p1.insert_text((200, 60), "Synthetic Chord Tune", fontname="helv", fontsize=24)
     _system(p1, 150, ["Alto Saxophone", "Trombone", "Guitar"], music_font, [
         (150, 120, "1", 7), (400, 120, "9", 7),
-        (200, ys_at(150, 2) - 12, "F#min7(b5)/EE9 Solo", 9),
+        (200, ys_at(150, 2) - 12, "Bbmaj7(b5)/GA9 Solo", 9),
         (320, ys_at(150, 1) - 12, "E9 Dm7 TBN SOLO", 9),
-        (450, ys_at(150, 0) - 12, "F#min7(b5)/EE9 ALTO SOLO", 9),
+        (450, ys_at(150, 0) - 12, "Bbmaj7(b5)/GA9 ALTO SOLO", 9),
         (250, ys_at(150, 0) - 12, "G7C", 9),
     ])
     _system(p1, 400, ["Alto Saxophone", "Trombone", "Guitar"], music_font, [

@@ -43,7 +43,7 @@ def voice_staff(label: str) -> tuple[StaffRole, Voice | None] | None:
 
 
 _CHOIR_WORD = re.compile(r"^\s*(?:choir|chorus|voices)\s*$", re.I)
-_CHOIR_LETTERS = re.compile(r"^(?=[SATB ]{2,})S*\s*A*\s*T*\s*B*$")  # SATB, TB, TTBB in voice order, capitals only: "BASS" is not one
+_CHOIR_LETTERS = re.compile(r"^(?!AB$)(?=[SATB ]{2,})S*\s*A*\s*T*\s*B*$")  # SATB, TB, TTBB in voice order, capitals only: "BASS" is not one
 _VOICE_PART = re.compile(r"^\s*(?:s|a|t|b|sop|alt|ten|bar|baritone)\.?\s*$", re.I)
 _GROUP = re.compile(r"^\s*(?:vocals?|voices?|vox)\s*$", re.I)
 _GROUP_TIGHTNESS = 0.75  # a group label sits closer to its staves than staves sit to each other

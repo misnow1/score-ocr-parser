@@ -19,7 +19,7 @@ _LEADING_CHAIRS = re.compile(rf"^({_NUM}(?:\s*(?:-|–|&|,)\s*{_NUM})*)\s+(?=[a-
 _CHAIR_PART = re.compile(rf"({_NUM})|(-|–)", re.I)
 _TRANSPOSITION = re.compile(r"\bin\s+[a-g][b#♭♯]?(?=\s|$)", re.I)
 _PARENS = re.compile(r"\(([^)]*)\)")
-_GLUED_CHAIR = re.compile(r"^(.*[A-Za-z])([Il|1-9])$")  # "TRUMPETI", "TENOR SAXI", "TRUMPET1": a chair glued to the name
+_GLUED_CHAIR = re.compile(r"^(.*[A-Za-z]\.?)([Il|1-9])$")  # "TRUMPETI", "TENOR SAXI", "TRUMPET1": a chair glued to the name
 MAX_CHAIR = 9  # a bigger number beside a label is a bar number, not a chair
 _COMBINED = re.compile(r",\s*(?=[a-z])", re.I)  # "Trb. 3, Tba.": a comma before a name, not a chair
 
@@ -299,6 +299,7 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
     if not stacks:
         return Instrumentation([], [], [])
     first = _first_system(stacks)
+    first_page = stacks[first][0]
 
     def add(label: str, hit: Resolved) -> InstrumentEntry:
         entry = entries.setdefault(hit.name, InstrumentEntry(hit.name, hit.family, [], [], []))
@@ -332,7 +333,10 @@ def build_instrumentation(pages: list[Page]) -> Instrumentation:
                 for part in check.hit.parts():
                     add(line.text, part)
 
+    first_unknown = {ln.text for ln in stacks[first][1]}
     for label, on_pages in unrecognised.items():
+        if label in first_unknown:
+            on_pages.add(first_page)  # the first system is a page it appears on too
         count = len(on_pages)
         warnings[f"label '{label}' is not recognised (on {count} page{'s' * (count != 1)})"] = None
 
