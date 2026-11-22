@@ -87,7 +87,7 @@ instruments:
     aliases: [cello, cellos, violoncello, vc, vcl]
   - name: Lead Vocal
     family: Vocal
-    aliases: [lead vocal, lead vocals, lead voc, l voc, lead vox, ld vox, vocal, vocals, vcls, voc, vox]
+    aliases: [lead vocal, lead vocals, lead voc, l voc, lead vox, ld vox, vocal, vocals, voc, vox]
   - name: Synthesizer
     family: Rhythm
     aliases: [synthesizer, synthesiser, synth]

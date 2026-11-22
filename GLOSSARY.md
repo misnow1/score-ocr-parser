@@ -17,6 +17,7 @@
 - **Rehearsal mark**: a single capital letter or a section word ("VERSE") above a system. A feature reports the latest mark at or before it.
 - **Instrumentation**: the instruments on the first system (full names), with chairs and doublings. Features may only name instruments in it.
 - **Recurring instrument**: an instrument the first system lacks that labels two or more later systems. It joins the instrumentation; a one-off later label for a missing instrument still warns.
+- **Combined label**: one staff label naming several instruments ("Trb. 3, Tba."). Each part is resolved and cross-checked on its own; a solo marked above such a staff is not assigned to any one part.
 - **Instrument variant**: a canonical name that counts as the same instrument as another for the later-system cross-check (Bass and Electric Bass). One rule, `present_as`, data in `instrument_variants.yaml`.
 - **Chair**: a numbered seat within a section ("Trumpet 2"). Not an instrument.
 - **Canonical instrument**: the normalised name from the alias table ("Alto Sax").
