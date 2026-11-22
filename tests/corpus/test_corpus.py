@@ -47,7 +47,19 @@ def _located(f, want: dict) -> bool:
     )
 
 
+def _open_problem(report, want: dict) -> str | None:
+    """An open fact: a feature with no instrument (and no shared ones) at the place."""
+    place = ", ".join(f"{k} {want[k]}" for k in ("page", "bar", "mark") if k in want) or "anywhere"
+    hits = [
+        f for f in report.features
+        if f.kind != "vocal lead" and f.instrument is None and not f.shared_with and _located(f, want)
+    ]
+    return None if hits else f"no open solo (no instrument) at {place}"
+
+
 def _feature_problem(report, want: dict) -> str | None:
+    if want.get("open"):
+        return _open_problem(report, want)
     names = want.get("instruments") or [want["instrument"]]
     shared = want.get("kind") == "shared"
     place = ", ".join(f"{k} {want[k]}" for k in ("page", "bar", "mark") if k in want) or "anywhere"
@@ -75,7 +87,7 @@ def _absent_problem(report, want: dict) -> str | None:
 
 
 def _fact_label(fact: dict) -> str:
-    name = fact.get("name") or fact.get("instrument") or " + ".join(fact.get("instruments", []))
+    name = fact.get("name") or fact.get("instrument") or ("open solo" if fact.get("open") else None) or " + ".join(fact.get("instruments", []))
     return f"fact {name!r}"
 
 
@@ -91,7 +103,8 @@ def check_facts(report, facts: dict) -> list[str]:
     """Return a list of human-readable mismatches (empty when all facts hold).
 
     Keys: instruments (names or {name, chairs, xfail}; chairs match exactly); features (exact page, bar, mark,
-    kind, chair, voice, one `instrument` or several `instruments`; `xfail: reason`
+    kind, chair, voice, one `instrument` or several `instruments`, or `open: true`
+    for a feature with no instrument; `xfail: reason`
     marks a known gap); not_features (must be absent); max_features.
     Bars and pages match exactly.
     """
@@ -163,6 +176,14 @@ def test_vocal_lead_fact_matches_by_voice_and_location():
     assert check_facts(report, feature_fact(instrument="Vocal", kind="vocal", voice="female", page=1, bar=1, mark="C"))
 
 
+def test_open_fact_needs_a_feature_with_no_instrument():
+    report = parse_score(FIXTURES / "finale_folded_solos.pdf")
+
+    assert check_facts(report, feature_fact(open=True, page=1, bar=9)) == []
+    assert check_facts(report, feature_fact(open=True, page=1, bar=17))  # no feature there
+    assert check_facts(report, feature_fact(open=True, page=2, bar=25))  # that one has an instrument
+
+
 def test_shared_feature_needs_every_listed_instrument_at_the_same_place(solos_report):
     shared = {"instruments": ["Vocal", "Drums"], "kind": "shared", "page": 2, "bar": 33}
     assert check_facts(solos_report, {"features": [shared]}) == []
@@ -213,7 +234,7 @@ def test_expected_facts_file_loads_and_each_entry_is_well_formed():
     assert isinstance(expected, dict)
     for stem, facts in expected.items():
         for want in facts.get("features", []) + facts.get("not_features", []):
-            assert "instrument" in want or "instruments" in want, f"{stem}: {want}"
+            assert "instrument" in want or "instruments" in want or want.get("open"), f"{stem}: {want}"
             if "xfail" in want:
                 assert want["xfail"], f"{stem}: xfail needs a reason"
 
