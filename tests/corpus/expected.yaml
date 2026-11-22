@@ -13,8 +13,12 @@
 #       - {instrument: Alto Sax, page: 5, bar: 29}
 #       - {instruments: [Clarinet, Trumpet], kind: shared, page: 1, bar: 9, mark: A}
 #       - {instrument: Vocal, kind: vocal, voice: female, page: 3, mark: B}
+#       - {open: true, page: 2, bar: 45}
 #     not_features:
 #       - {instrument: Baritone Sax, page: 5}
+#
+# `open: true` stands for a feature with no instrument (a generic marking over the staves, an open
+# solo); combine it with page, bar and mark. It replaces `instrument`.
 #
 # `xfail: reason` marks a fact the tool does not meet yet. It must keep
 # failing; once it passes, the suite says to remove the xfail.
@@ -112,14 +116,13 @@ scores:
 
   "I Pray on Christmas extended version nov Score":
     # Three features: a piano solo vamp, a tuba solo while the bass is tacet, and a tuba solo break.
-    # Cap is 6 until copies of one marking merge into one feature (the tool reports six); lower it to 3 then.
-    max_features: 6
+    max_features: 3
     features:
       - {instrument: Piano, page: 1}
       - {instrument: Tuba, page: 3}
-      - {instrument: Tuba, page: 8, bar: 46, mark: D, xfail: "reported as Alto Sax (plus a copy with no instrument)"}
+      - {instrument: Tuba, page: 8, bar: 46, mark: D, xfail: "reported once, as an open solo with no instrument: the marking is generic over every staff, so it is not given to a staff"}
     not_features:
-      - {instrument: Alto Sax, page: 8, xfail: "the p8 solo break is a tuba solo; the A. and Bar. lines are vocals"}
+      - {instrument: Alto Sax, page: 8}
 
   # A scan (OCR). Page-1 staves: Alto Sax 1-2, Tenor Sax 1-2, Baritone Sax, Trumpet 1-4,
   # Trombone 1-4, Guitar, Piano, Bass, Drums, Vibraphone. Staff names are not abbreviated on later pages.
@@ -153,10 +156,10 @@ scores:
       - Piano
       - Bass
       - Drums
-    # One feature: a group of solos over bars 45-77 inside a repeat (slashes on every staff but the organ
-    # and drums; bar 77 is marked "lead only"). Who plays is not clear, so no instrument is asserted
-    # beyond the Guitar, whose part shows it. The tool reports three features: the "(SOLOS)" marking twice
-    # (p2, bar 45) and a guitar solo built from chord text (p4, bar 93); lower the cap to 1 when copies merge.
-    max_features: 3
+    # One feature: a group of solos over bars 45-77 inside a repeat (the "(SOLOS)" marking is printed
+    # over every staff but the organ and drums; bar 77 is marked "lead only"). Who plays is not clear, so
+    # it is one open solo with no instrument. The tool reports it once (p2, bar 45) plus one false positive,
+    # a guitar solo built from chord text (p4, bar 93), so the cap is 2; lower it to 1 when that goes.
+    max_features: 2
     features:
-      - {instrument: Guitar, bar: 45}
+      - {open: true, page: 2, bar: 45}
