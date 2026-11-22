@@ -11,7 +11,9 @@ from .layout import label_stacks, label_token_ids, label_tokens, lines_without
 from .measures import (
     BarCount,
     BarReading,
+    above_top,
     bar_at,
+    below_bottom,
     barlines_through,
     page_number_zone,
     read_phrase,
@@ -92,14 +94,28 @@ def find_systems(page: Page, headers: frozenset[str] = frozenset()) -> list[Syst
     is_page_number = page_number_zone(page, label_right)
     for row in other_rows:
         owner = owning_system(systems, row[0].yc)
-        _place(owner, row, is_page_number)
+        under = _numbered_under(systems, owner, row)
+        _place(under or owner, row, is_page_number, below=under is not None)
     return systems
 
 
-def _place(system: System, row: list[Token], is_page_number: Callable[[str, float], bool]) -> None:
+def _numbered_under(systems: list[System], owner: System, row: list[Token]) -> System | None:
+    """The system whose bottom staff a line of bare numbers sits just under, when
+    the line is not in the band above its owner (some scores print bar numbers
+    under the system, where text belongs to the system beneath)."""
+    yc = row[0].yc
+    if not all(t.text.isdigit() for t in row) or above_top(owner.staves[0].yc, yc):
+        return None
+    return next((s for s in systems if below_bottom(s.staves[-1].yc, yc)), None)
+
+
+def _place(
+    system: System, row: list[Token], is_page_number: Callable[[str, float], bool], below: bool = False
+) -> None:
     top = system.staves[0].yc
+    bottom = system.staves[-1].yc if below else None
     for phrase in _phrases(row):
-        bar, mark, rest = read_phrase(phrase, top, is_page_number)
+        bar, mark, rest = read_phrase(phrase, top, is_page_number, bottom)
         if bar:
             system.bars.append(bar)
         if mark:

@@ -109,3 +109,11 @@ def test_different_chairs_stay_separate_and_a_restated_chair_merges():
     guitars = [f for f in report.features if f.instrument == "Guitar"]
     got = [(f.chair, f.page, f.bar, [(loc.page, loc.bar) for loc in f.locations]) for f in guitars]
     assert got == [(1, 2, 49, [(2, 49), (2, 57)]), (2, 3, 65, [(3, 65)])]
+
+
+def test_bar_numbers_printed_below_each_system_are_read():
+    report = parse_score(FIXTURES / "finale_bar_numbers_below.pdf")
+
+    got = {(f.instrument, f.bar) for f in report.features}
+    # 41-44 sit under the first system, 45-48 under the second; the 3 3 3 inside it are triplets
+    assert got == {("Trombone", 43), ("Alto Sax", 45)}
