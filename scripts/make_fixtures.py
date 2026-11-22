@@ -262,6 +262,34 @@ def chair_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+SHARED_FULL = ["Soprano Saxophone", "Alto Saxophone", "Clarinet in Bb", "Trumpet in Bb 3"]
+SHARED_ABBR = ["S. Sx.", "A. Sx.", "Cl.", "B Tpt. 3"]
+
+
+def shared_solos(music_font: Path, out: Path) -> None:
+    """One marking over several instruments: a bare "SOLO" at the same place
+    above the Soprano Sax, Clarinet and Trumpet 3 staves (marker A, bar 9), an
+    "ALTO SOLO" that stays a single-instrument feature, and, on the next
+    system but one, a bare "SOLO" over two staves at different places (two features)."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Shared Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, SHARED_FULL, music_font, [
+        (150, 120, "1", 7), (200, 105, "A", 12), (400, 120, "9", 7),
+        (400, ys_at(150, 0) - 12, "SOLO", 9),
+        (400, ys_at(150, 2) - 12, "SOLO", 9),
+        (400, ys_at(150, 3) - 12, "SOLO", 9),
+        (500, ys_at(150, 1) - 12, "ALTO SOLO", 9),
+    ])
+    _system(p1, 330, SHARED_ABBR, music_font, [(150, 300, "17", 7)])
+    _system(p1, 560, SHARED_ABBR, music_font, [
+        (150, 530, "25", 7),
+        (250, ys_at(560, 0) - 12, "SOLO", 9),
+        (450, ys_at(560, 2) - 12, "SOLO", 9),
+    ])
+    doc.save(out)
+
+
 VOCAL_LABELS = FULL + ["Voice Lead F", "Voice Lead M", "Voice bck F"]
 
 
@@ -622,6 +650,7 @@ def main() -> None:
         non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
         sparse_bar_numbers(font, OUT / "finale_sparse_bar_numbers.pdf")
         vocal_leads(font, OUT / "finale_vocal_leads.pdf")
+        shared_solos(font, OUT / "finale_shared_solos.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")

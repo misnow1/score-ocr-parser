@@ -11,7 +11,7 @@ from typing import Literal, NamedTuple
 
 from .layout import is_chord_symbol, running_headers
 from .instruments import Roster, resolve, resolve_against_first_system
-from .models import Feature, FeatureKind, Location, Page, Voice
+from .models import Feature, FeatureKind, Location, Page, Participant, Voice
 from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
 from .systems import Phrase, System, find_systems
 from .vocal import lead_text, voice_staff
@@ -376,13 +376,59 @@ def _group_chair(group: list[Candidate]) -> tuple[int | None, bool]:
     return None, any(c.chair_ambiguous for c in group)
 
 
-def build_feature(group: list[Candidate]) -> Feature:
-    """One Feature from a group of copies; the best-evidenced copy leads."""
+SHARED_X_TOLERANCE = 3.0  # pt: markings this close are printed at the same place
+
+
+def _coincide(a: list[Candidate], b: list[Candidate]) -> bool:
+    """Whether two groups of different instruments hold the same wording at the
+    same place: one bare marking over several staves, not two soloists."""
+    return any(
+        x.kind != "vocal lead"
+        and x.instrument != y.instrument
+        and x.system_index == y.system_index
+        and x.text.lower() == y.text.lower()
+        and abs(x.x - y.x) <= SHARED_X_TOLERANCE
+        and x.bar == y.bar
+        for x in a
+        for y in b
+    )
+
+
+def join_shared(groups: list[list[Candidate]]) -> list[list[list[Candidate]]]:
+    """Sets of groups that are one marking shared by several instruments, in
+    reading order (a lone group is a set of one). Only groups with an instrument
+    join; a group joins the first set it coincides with."""
+    sets: list[list[list[Candidate]]] = []
+    for group in groups:
+        home = next(
+            (s for s in sets if group[0].instrument and any(_coincide(group, g) for g in s)),
+            None,
+        )
+        if home is None:
+            sets.append([group])
+        else:
+            home.append(group)
+    return sets
+
+
+def _participant(group: list[Candidate]) -> Participant:
+    chair, ambiguous = _group_chair(group)
+    return Participant(group[0].instrument or "", chair, ambiguous)
+
+
+def build_feature(group: list[Candidate], others: list[list[Candidate]] | None = None) -> Feature:
+    """One Feature from a group of copies; the best-evidenced copy leads. `others`
+    are the groups of the other instruments the same marking is printed over."""
+    others = others or []
+    everything = group + [c for g in others for c in g]
     lead = max(group, key=lambda c: c.confidence)
     reasons = list(lead.reasons)
     chair, ambiguous = _group_chair(group)
     if len(group) > 1:
         reasons.append(f"merged {len(group)} copies of the same marking")
+    if others:
+        names = ", ".join(p.instrument for p in map(_participant, others))
+        reasons.append(f"shared with {names}: the same wording at the same place on several staves")
     return Feature(
         kind=lead.kind,
         instrument=lead.instrument,
@@ -394,9 +440,10 @@ def build_feature(group: list[Candidate]) -> Feature:
         raw_text=lead.text,
         confidence=round(lead.confidence, 2),
         reasons=reasons,
-        locations=_locations(group),
+        locations=_locations(everything),
         voice=lead.voice,
         section=next((c.section for c in group if c.section), None),
+        shared_with=[_participant(g) for g in others],
     )
 
 
@@ -411,4 +458,5 @@ def find_features(
     drop_out_of_sequence(systems)
     count_bars(systems)
     candidates, warnings = collect_candidates(systems, roster)
-    return [build_feature(g) for g in merge_candidates(candidates)], warnings
+    sets = join_shared(merge_candidates(candidates))
+    return [build_feature(s[0], s[1:]) for s in sets], warnings

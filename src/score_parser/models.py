@@ -87,8 +87,19 @@ class Location:
 
 
 @dataclass
+class Participant:
+    """An instrument (with its chair) that shares a feature with the lead one."""
+
+    instrument: str
+    chair: int | None = None
+    chair_ambiguous: bool = False
+
+
+@dataclass
 class Feature:
-    """A solo or feature, with its locations (`page` and `bar` are the first)."""
+    """A solo or feature, with its locations (`page` and `bar` are the first).
+    One marking over several staves is one Feature: `instrument` and `chair`
+    name the first (topmost) instrument, `shared_with` the others."""
 
     kind: FeatureKind
     instrument: str | None
@@ -103,6 +114,7 @@ class Feature:
     chair_ambiguous: bool = False  # on a staff shared by several chairs ("Gtrs.")
     voice: Voice | None = None  # vocal leads only
     section: str | None = None  # vocal leads only: "Verse 1", when the marking gives it
+    shared_with: list[Participant] = field(default_factory=list)  # other instruments, staff order
 
 
 @dataclass
