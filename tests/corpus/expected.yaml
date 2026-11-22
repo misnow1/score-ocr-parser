@@ -33,7 +33,7 @@ scores:
       - Guitar
       - Electric Bass
       - Drums
-      - {name: Wood Block, xfail: "percussion line that only appears from p10 is not in the instrumentation"}
+      - Wood Block
     # Thirteen verified features; the Bass Guitar "Solo" on p1 mm1-5 is ambiguous, so one extra is allowed.
     max_features: 14
     features:
