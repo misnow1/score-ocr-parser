@@ -229,6 +229,33 @@ def repeated_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def non_bar_numbers(music_font: Path, out: Path) -> None:
+    """Numbers that are not bar numbers: a time signature at the start of the
+    system, a running header with a page number ("10 Score"), and triplet 3s
+    (one alone above the staff, one glued to a second 3 inside the system)."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Number Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7),
+        (125, 150, "44", 9),
+        (130, ys_at(150, 0) - 12, "ALTO SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 120, ABBR, music_font, [
+        (54, 57, "10 Score", 9),
+        (150, 100, "33", 7),
+        (100, ys_at(120, 2) - 12, "TBN SOLO", 9),
+    ])
+    p3 = doc.new_page(width=612, height=792)
+    _system(p3, 150, ABBR, music_font, [
+        (150, 120, "49", 7), (400, 120, "57", 7),
+        (250, 125, "3", 7), (255, ys_at(150, 2) + 5, "3 3", 7),
+        (260, ys_at(150, 3) - 12, "GUITAR SOLO", 9),
+    ])
+    doc.save(out)
+
+
 RA_CUE = ["Piano", "Bass", "Drum Set"]
 RA_FULL = [
     "Piccolo",
@@ -386,6 +413,7 @@ def main() -> None:
         finale_solos(font, OUT / "finale_solos.pdf")
         right_aligned(font, OUT / "finale_right_aligned.pdf")
         repeated_solos(font, OUT / "finale_repeated_solos.pdf")
+        non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     pattern_scanned(OUT / "finale_full_labels.pdf", OUT / "scan_pattern.pdf")

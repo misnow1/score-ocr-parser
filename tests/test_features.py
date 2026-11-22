@@ -71,3 +71,11 @@ def test_chord_symbols_are_stripped_from_phrases():
 
     assert not any("G7" in f.raw_text for f in report.features)
     assert feature_at(report, "TBN SOLO").raw_text == "TBN SOLO"
+
+
+def test_numbers_that_are_not_bars_are_not_taken_as_bars():
+    report = parse_score(FIXTURES / "finale_non_bar_numbers.pdf")
+
+    got = {(f.instrument, f.page, f.bar) for f in report.features}
+    # time signature "44" (p1), header "10 Score" (p2), triplet 3s (p3)
+    assert got == {("Alto Sax", 1, 1), ("Trombone", 2, 33), ("Guitar", 3, 49)}
