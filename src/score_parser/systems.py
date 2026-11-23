@@ -41,6 +41,7 @@ class System:
     bars: list[tuple[float, int, float]] = field(default_factory=list)
     marks: list[tuple[float, str]] = field(default_factory=list)
     texts: list[Phrase] = field(default_factory=list)
+    tokens: list[Token] = field(default_factory=list)  # every word placed on the system, lyrics included
     source: Source = "text"
     barlines: list[float] = field(default_factory=list)  # drawn barlines; text-layer pages only
     rule_y: float = 0.0  # a staff the barlines cross
@@ -121,6 +122,7 @@ def _place(
 ) -> None:
     top = system.staves[0].yc
     bottom = system.staves[-1].yc if below else None
+    system.tokens.extend(row)
     for phrase in _phrases(row):
         bar, mark, rest = read_phrase(phrase, top, is_page_number, bottom)
         if bar:
