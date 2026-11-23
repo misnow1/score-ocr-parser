@@ -18,7 +18,7 @@ def test_a_lead_staff_change_with_no_wording_is_a_lead_for_the_new_voice():
     got = [(f.voice, f.page, f.bar, f.rehearsal_mark) for f in leads(report, 1)]
     assert got == [
         ("male", 1, 3, "B"),  # the male alone sings bar 3, the female and both backings stop
-        ("female", 1, 6, "B"),  # the female alone sings bar 6 after the male
+        ("female", 1, 5, "B"),  # the female alone sings bars 5-6 after the male
     ]
     assert all(f.instrument is None for f in leads(report))
 
@@ -46,6 +46,45 @@ def test_a_handover_with_the_wording_printed_is_one_feature_with_the_text_eviden
     assert (male.voice, male.section, male.bar) == ("male", "Verse 2", 15)
     assert male.raw_text == "Male Lead Verse 2"
     assert male.confidence >= LOW_CONFIDENCE
+    # the text and the handover read from the staves are merged copies of one marking
+    assert "merged 2 copies of the same marking" in male.reasons
+
+
+def test_a_one_bar_fill_by_the_other_lead_is_no_handover():
+    report = parse_score(FIXTURES / "finale_vocal_handover.pdf")
+
+    assert leads(report, 4) == []  # the female alone sings bar 21 only, between male bars
+
+
+def test_wording_and_handovers_count_in_the_order_they_sit_along_the_bars():
+    report = parse_score(FIXTURES / "finale_vocal_lead_order.pdf")
+
+    got = [(f.voice, f.page, f.bar) for f in leads(report) if f.page < 8]
+    assert got == [
+        ("female", 1, 5),  # "solo" over Voice Lead F
+        ("male", 2, 7),  # handover: the male alone sings bars 7-8
+        ("female", 2, 11),  # the F "solo" returns after the male: a new lead, not a reminder of page 1
+        ("female", 3, 40),  # "Female Lead" in bar 40
+        ("male", 3, 42),  # handover
+        ("female", 3, 44),  # the female returns after the male on the same system: her own feature
+        ("male", 5, 106),  # "Male Lead" (the male singing from the first bar: one feature)
+        ("female", 5, 109),  # handover back to the female after the text lead
+    ]
+
+
+def test_a_text_lead_early_on_a_system_does_not_wipe_out_a_handover_later_on_it():
+    report = parse_score(FIXTURES / "finale_vocal_lead_order.pdf")
+
+    # page 5 ends with the female alone; the female alone on page 7 is the lead already
+    assert leads(report, 7) == []
+    assert leads(report, 4) == []
+
+
+def test_the_first_bar_is_read_when_its_left_edge_is_not_a_barline():
+    report = parse_score(FIXTURES / "finale_vocal_lead_order.pdf")
+
+    # the bar is only approximate here (the first bar has no barline to count from)
+    assert [f.voice for f in leads(report, 8)] == ["male"]
 
 
 def test_a_lead_restated_after_a_page_turn_is_one_feature():
@@ -60,7 +99,7 @@ def test_a_lead_restated_after_a_page_turn_is_one_feature():
 def test_voiceless_choir_cues_on_successive_pages_stay_separate():
     report = parse_score(FIXTURES / "finale_vocal_page_turn.pdf")
 
-    got = [(f.voice, f.page, f.bar) for f in report.features if f.page >= 5]
+    got = [(f.voice, f.page, f.bar) for f in report.features if f.page in (5, 6)]
     assert got == [(None, 5, 104), (None, 6, 107)]
 
 
@@ -69,3 +108,17 @@ def test_another_voice_leading_in_between_makes_the_restated_lead_a_new_feature(
 
     got = [(f.voice, f.page, f.bar) for f in report.features if 3 <= f.page <= 4]
     assert got == [("female", 3, 61), ("male", 3, 64), ("female", 4, 67)]
+
+
+def test_an_unsectioned_lead_and_a_later_one_naming_a_section_are_two_features():
+    report = parse_score(FIXTURES / "finale_vocal_page_turn.pdf")
+
+    got = [(f.voice, f.section, f.page) for f in report.features if f.page in (7, 8)]
+    assert got == [("male", None, 7), ("male", "Verse 2", 8)]
+
+
+def test_a_lead_restated_under_a_new_rehearsal_mark_is_a_new_feature():
+    report = parse_score(FIXTURES / "finale_vocal_page_turn.pdf")
+
+    got = [(f.voice, f.page, f.rehearsal_mark) for f in report.features if f.page in (9, 10)]
+    assert got == [("female", 9, "A"), ("female", 10, "B")]

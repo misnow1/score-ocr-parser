@@ -381,24 +381,25 @@ def _vocal_wording(
 def handover_candidates(systems: list[System], roster: Roster, explicit: list[Candidate]) -> list[Candidate]:
     """Vocal leads for a change of lead between the voice staves with no wording
     (see `handover.sole_leads`): the voice that sings alone after another
-    voice's lead. The lead at any point is the voice that last sang alone, or
-    the voice of a lead marked in text on an earlier system. The first voice
-    to sing alone only starts the count: no change, so no feature. A restated
-    lead is merged with a marked one, so a marked handover stays one feature."""
-    marked: dict[int, Voice] = {}
-    for c in sorted(explicit, key=lambda c: (c.system_index, c.x)):
+    voice's lead. Leads marked in text and bars where one voice sings alone make
+    one stream in reading order (system, then x); the lead at any point is the
+    voice of the latest of either before it. The first voice to sing alone only
+    starts the count: no change, so no feature. A handover whose voice is also
+    marked in text merges with that marking into one feature."""
+    stream: list[tuple[int, float, int, Voice, str | None]] = []
+    for c in explicit:
         if c.kind == "vocal lead" and c.voice:
-            marked[c.system_index] = c.voice
+            stream.append((c.system_index, c.x, 0, c.voice, None))
+    for index, system in enumerate(systems):
+        stream += [(index, x, 1, voice, label) for x, voice, label in sole_leads(system)]
     current: Voice | None = None
     found: list[Candidate] = []
-    for index, system in enumerate(systems):
-        context = SystemContext(systems, index, roster)
-        for x, voice, label in sole_leads(system):
-            if current is not None and voice != current:
-                why = f"lead staff changed to '{label}' with no wording: the other lead staff went quiet"
-                found.append(_vocal_candidate(context, x, f"lead handed to {label}", voice, None, VOICE_HANDOVER, why))
-            current = voice
-        current = marked.get(index, current)
+    for index, x, from_staff, voice, label in sorted(stream, key=lambda e: e[:3]):
+        if from_staff and current is not None and voice != current:
+            context = SystemContext(systems, index, roster)
+            why = f"lead staff changed to '{label}' with no wording: the other lead staff went quiet"
+            found.append(_vocal_candidate(context, x, f"lead handed to {label}", voice, None, VOICE_HANDOVER, why))
+        current = voice
     return found
 
 
@@ -444,26 +445,51 @@ SHARED_X_TOLERANCE = 3.0  # pt: markings this close are printed at the same plac
 MAX_REMINDER_GAP = 16  # bars: a reminder sits on the next system, one row of bars on
 
 
+def in_lead_order(candidates: list[Candidate]) -> list[Candidate]:
+    """Candidates by system, and the voiced vocal leads of one system (marked ones
+    and handovers) by x, so another voice's lead between two copies of one lead
+    is seen as in between. Other candidates keep their places; the sorts are
+    stable, so a text and its solo copy at one x stay in order."""
+    ordered = sorted(candidates, key=lambda c: c.system_index)
+    slots: dict[int, list[int]] = {}
+    for i, c in enumerate(ordered):
+        if c.kind == "vocal lead" and c.voice:
+            slots.setdefault(c.system_index, []).append(i)
+    for indices in slots.values():
+        for i, c in zip(indices, sorted((ordered[i] for i in indices), key=lambda c: c.x)):
+            ordered[i] = c
+    return ordered
+
+
 def _is_reminder_of(c: Candidate, group: list[Candidate], interleaved: bool = False) -> bool:
     """Whether `c` restates the solo in `group` rather than starting another:
     it is on the same or the next system, in the first bar of a later row,
     on no other chair (on a later system), and no more than a row of bars on.
-    A voiced vocal lead over a page turn may restate itself anywhere on the next
-    page's row, unless another voice's lead (`interleaved`) came between; a
-    voiceless cue (a choir) may not, so cues on successive pages stay apart."""
+    A voiced vocal lead is never a reminder when another voice's lead came
+    between (`interleaved`): the voice returning is a new lead. Over a page turn
+    it may restate itself anywhere on the next page's row, but not under a
+    new rehearsal mark, and not with a section the lead before it lacks; a
+    voiceless cue (a choir) may not turn the page, so cues on successive pages
+    stay apart."""
     last = group[-1]
-    if c.systems_from(last) > 1:
+    if interleaved or c.systems_from(last) > 1:
         return False
-    turned = c.kind == "vocal lead" and c.voice is not None and c.page > last.page and not interleaved
+    voiced = c.kind == "vocal lead" and c.voice is not None
+    later_system = c.system_index != last.system_index
+    if voiced and later_system and c.mark != last.mark:
+        return False
+    turned = voiced and c.page > last.page
     if c.row != last.row and not c.opens_row and not turned:
         return False
     # Copies on one system may name different chairs (one above each staff);
     # a restatement on the next system keeps its chair.
     chairs = {g.chair for g in group if g.chair is not None}
-    if c.system_index != last.system_index and c.chair is not None and chairs and c.chair not in chairs:
+    if later_system and c.chair is not None and chairs and c.chair not in chairs:
         return False
     sections = {g.section for g in group if g.section}
     if c.section and sections and c.section not in sections:  # "Verse 1" then "Verse 2"
+        return False
+    if voiced and later_system and c.section and not sections:  # an unsectioned lead, then "Verse 2"
         return False
     return c.bar is None or last.bar is None or abs(c.bar - last.bar) <= MAX_REMINDER_GAP
 
@@ -592,16 +618,17 @@ def merge_candidates(candidates: list[Candidate]) -> list[list[Candidate]]:
     instrument on another chair or many bars on is a new feature."""
     groups: list[list[Candidate]] = []
     latest: dict[MergeKey, list[Candidate]] = {}
-    last_lead: list[Candidate] | None = None  # the group the latest vocal lead joined
+    last_lead: list[Candidate] | None = None  # the group the latest voiced vocal lead joined
     for c in candidates:
         group = latest.get(c.key)
         if group is None and c.instrument is None and c.kind != "vocal lead":
             group = _restated(c, latest)
-        if group is None or not _is_reminder_of(c, group, last_lead is not None and last_lead is not group):
+        voiced = c.kind == "vocal lead" and c.voice is not None
+        if group is None or not _is_reminder_of(c, group, voiced and last_lead is not None and last_lead is not group):
             group = latest[c.key] = []
             groups.append(group)
         group.append(c)
-        if c.kind == "vocal lead":
+        if voiced:
             last_lead = group
     return groups
 
@@ -719,7 +746,7 @@ def find_features(
     count_bars(systems)
     candidates, warnings = collect_candidates(systems, roster)
     candidates += handover_candidates(systems, roster, candidates)
-    candidates.sort(key=lambda c: c.system_index)  # stable: a handover follows the wording on its system
+    candidates = in_lead_order(candidates)
     sets = join_shared(merge_candidates(fold_copies(candidates)))
     return in_score_order([(build_feature(s[0], s[1:]), s) for s in sets]), warnings
 
