@@ -2,7 +2,8 @@
 
 Steps carry only `section`, `instrument` and `note`. The planner owns whether a
 number is vocal or instrumental (`kind`) and downstage positions (`position`),
-so this module never emits either.
+so this module never emits either. Steps come in score order; the rendered
+draft puts a comment header before each run of steps under one rehearsal mark.
 """
 
 import json
@@ -10,10 +11,17 @@ import json
 from .models import Feature, FlowStep
 
 LOW_CONFIDENCE = 0.8  # below this a step gets a TODO(score-parser) comment
+NO_SECTION = "(no section)"  # header over steps with no rehearsal mark
 
 
 def _named(instrument: str, chair: int | None) -> str:
     return f"{instrument} {chair}" if chair else instrument
+
+
+def _rehearsal(f: Feature) -> str:
+    """The note's rehearsal-mark part, saying where a carried mark is printed."""
+    carried = f" (carried from page {f.mark_carried_from})" if f.mark_carried_from else ""
+    return f"rehearsal {f.rehearsal_mark}{carried}"
 
 
 def _shared_step(f: Feature) -> FlowStep:
@@ -27,7 +35,7 @@ def _shared_step(f: Feature) -> FlowStep:
     if f.bar is not None:
         where.append(f"bar {f.bar}")
     if f.rehearsal_mark:
-        where.append(f"rehearsal {f.rehearsal_mark}")
+        where.append(_rehearsal(f))
     if ambiguous:
         where.append(f"chair ambiguous for {', '.join(ambiguous)} (shared staff)")
     note = f"{', '.join(where)}; confidence {f.confidence:g}"
@@ -36,7 +44,7 @@ def _shared_step(f: Feature) -> FlowStep:
         todo = f"low confidence ({f.confidence:g}): " + "; ".join(f.reasons)
     elif ambiguous:
         todo = "chair ambiguous: " + "; ".join(f.reasons)
-    return FlowStep(section, ", ".join(n.lower() for n in names), note, todo)
+    return FlowStep(section, ", ".join(n.lower() for n in names), note, todo, f.rehearsal_mark)
 
 
 def _step(f: Feature) -> FlowStep:
@@ -53,7 +61,7 @@ def _step(f: Feature) -> FlowStep:
     if f.bar is not None:
         where.append(f"bar {f.bar}")
     if f.rehearsal_mark:
-        where.append(f"rehearsal {f.rehearsal_mark}")
+        where.append(_rehearsal(f))
     if f.chair:
         where.append(f"chair {f.chair}")
     elif f.chair_ambiguous:
@@ -65,7 +73,7 @@ def _step(f: Feature) -> FlowStep:
     elif f.chair_ambiguous:
         todo = "chair ambiguous: " + "; ".join(f.reasons)
     who = "vocal" if vocal else (f.instrument or "unknown").lower()
-    return FlowStep(section, who, note, todo)
+    return FlowStep(section, who, note, todo, f.rehearsal_mark)
 
 
 def build_flow(features: list[Feature]) -> list[FlowStep]:
@@ -76,7 +84,11 @@ def render_yaml(flow: list[FlowStep], header: str = "") -> str:
     """The draft file text. JSON strings are valid YAML double-quoted scalars."""
     lines = [f"# {ln}" for ln in header.splitlines()]
     lines.append("flow:")
-    for s in flow:
+    for i, s in enumerate(flow):
+        if i == 0 or s.mark != flow[i - 1].mark:  # a new run of steps under one mark
+            lines.append(f"  # Section {s.mark}" if s.mark else f"  # {NO_SECTION}")
+            if not s.mark:
+                lines.append("  # TODO(score-parser): no rehearsal mark found for the steps below")
         q = json.dumps
         lines.append(
             f"  - {{ section: {q(s.section)}, instrument: {q(s.instrument)}, note: {q(s.note)} }}"

@@ -226,18 +226,23 @@ def _longest_non_decreasing(values: list[int]) -> list[int]:
     return max(best, key=len, default=[])
 
 
-def current_mark(systems: list[HasMarks], system: HasMarks, x: float) -> str | None:
+class MarkReading(NamedTuple):
+    text: str
+    page: int  # where it is printed; before the feature's own page when carried
+
+
+def current_mark(systems: list[HasMarks], system: HasMarks, x: float) -> MarkReading | None:
     """The mark in force at (page, system, x): the latest one at or before it in
-    reading order on the same page. A mark never carries onto another page."""
+    reading order, on this page or an earlier one (ADR 0003). None before the
+    first mark of the score."""
     current = None
     for s in systems:
-        if s.page != system.page:
-            continue
-        if s.index > system.index:
+        order, here = (s.page, s.index), (system.page, system.index)  # `index` counts per page
+        if order > here:
             break
         for mx, text in s.marks:
-            if s.index < system.index or mx <= x + X_SLACK:
-                current = text
+            if order < here or mx <= x + X_SLACK:
+                current = MarkReading(text, s.page)
     return current
 
 

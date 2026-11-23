@@ -115,6 +115,7 @@ class Feature:
     voice: Voice | None = None  # vocal leads only
     section: str | None = None  # vocal leads only: "Verse 1", when the marking gives it
     shared_with: list[Participant] = field(default_factory=list)  # other instruments, staff order
+    mark_carried_from: int | None = None  # page the rehearsal mark is printed on, when it is carried onto this one
 
 
 @dataclass
@@ -125,6 +126,7 @@ class FlowStep:
     instrument: str
     note: str
     todo: str | None = None  # set on low-confidence steps
+    mark: str | None = None  # the rehearsal mark the step falls under (None: no section); groups the draft
 
 
 @dataclass

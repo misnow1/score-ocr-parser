@@ -688,6 +688,69 @@ def rehearsal_marks(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+def mark_carry(music_font: Path, out: Path) -> None:
+    """Four pages, one system each. A trombone solo sits before the first mark
+    (no mark), mark A is printed on page 1, page 2 has none (A carries over),
+    mark B is printed on page 3, and page 4 has none (B carries over)."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Carry Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (150, 120, "1", 7),
+        (400, 105, "A", 12),
+        (450, ys_at(150, 0) - 12, "ALTO SOLO", 9),
+        (200, ys_at(150, 2) - 12, "TBN SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, ABBR, music_font, [
+        (150, 120, "33", 7),
+        (250, ys_at(150, 3) - 12, "GUITAR SOLO", 9),
+    ])
+    p3 = doc.new_page(width=612, height=792)
+    _system(p3, 150, ABBR, music_font, [
+        (150, 120, "65", 7), (200, 105, "B", 12),
+        (300, ys_at(150, 4) - 12, "DRUM SOLO", 9),
+    ])
+    p4 = doc.new_page(width=612, height=792)
+    _system(p4, 150, ABBR, music_font, [
+        (150, 120, "97", 7),
+        (250, ys_at(150, 1) - 12, "TRUMPET SOLO", 9),
+    ])
+    doc.save(out)
+
+
+def score_order(music_font: Path, out: Path) -> None:
+    """Solos on one system whose staff order is not their order along the bars:
+    the guitar (lower staff) solos first, then the alto, then the trombone."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Order Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (150, 120, "1", 7), (250, 120, "9", 7), (350, 120, "17", 7), (450, 120, "25", 7),
+        (200, ys_at(150, 3) - 12, "GUITAR SOLO", 9),
+        (300, ys_at(150, 0) - 12, "ALTO SOLO", 9),
+        (400, ys_at(150, 2) - 12, "TBN SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, ABBR, music_font, [
+        (150, 120, "33", 7),
+        (400, ys_at(150, 1) - 12, "TRUMPET SOLO", 9),
+    ])
+    doc.save(out)
+
+
+def unnumbered_order(music_font: Path, out: Path) -> None:
+    """No bar numbers anywhere: solos on one system keep page and x order."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Unnumbered Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, FULL, music_font, [
+        (400, ys_at(150, 0) - 12, "ALTO SOLO", 9),
+        (250, ys_at(150, 3) - 12, "GUITAR SOLO", 9),
+    ])
+    doc.save(out)
+
+
 def scanned(src: Path, out: Path, dpi: int) -> None:
     """An image-only PDF: the source page rendered at `dpi`, no text layer."""
     with pymupdf.open(src) as doc:
@@ -832,6 +895,9 @@ def main() -> None:
         label_repair_unlabeled(font, OUT / "label_repair_unlabeled.pdf")
         label_repair_overprint(font, OUT / "label_repair_overprint.pdf")
         rehearsal_marks(font, OUT / "rehearsal_marks.pdf")
+        mark_carry(font, OUT / "finale_mark_carry.pdf")
+        score_order(font, OUT / "finale_score_order.pdf")
+        unnumbered_order(font, OUT / "finale_unnumbered_order.pdf")
         chair_solos(font, OUT / "finale_chair_solos.pdf")
         non_bar_numbers(font, OUT / "finale_non_bar_numbers.pdf")
         sparse_bar_numbers(font, OUT / "finale_sparse_bar_numbers.pdf")

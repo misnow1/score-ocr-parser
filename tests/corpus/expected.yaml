@@ -14,11 +14,20 @@
 #       - {instruments: [Clarinet, Trumpet], kind: shared, page: 1, bar: 9, mark: A}
 #       - {instrument: Vocal, kind: vocal, voice: female, page: 3, mark: B}
 #       - {open: true, page: 2, bar: 45}
+#       - {instrument: Trombone, section: B}
+#     order:
+#       - {instrument: Piano, page: 1}
+#       - {instrument: Tuba, page: 8}
 #     not_features:
 #       - {instrument: Baritone Sax, page: 5}
 #
 # `open: true` stands for a feature with no instrument (a generic marking over the staves, an open
 # solo); combine it with page, bar and mark. It replaces `instrument`.
+#
+# `section` is another name for `mark`: the rehearsal mark the flow draft groups by (marks carry
+# across page turns, ADR 0003). `order` lists single-instrument feature entries that must appear in
+# this order in the report (score order: page, bar, x), not necessarily adjacent, so a fact can say
+# "Tuba p8 follows Piano p1" without exact bars.
 #
 # `xfail: reason` marks a fact the tool does not meet yet. It must keep
 # failing; once it passes, the suite says to remove the xfail.
