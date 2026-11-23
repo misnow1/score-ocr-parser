@@ -121,7 +121,7 @@ def test_folder_gives_the_instrument_when_the_filename_names_none(tmp_path):
 
 
 def test_part_with_neither_a_part_word_nor_an_instrument_folder_warns_and_reads_no_solos(tmp_path):
-    report = parse_part(place(tmp_path, "AJC 2026", "Synthetic Tune"))
+    report = parse_part(place(tmp_path, "loose files", "Synthetic Tune"))
 
     assert report.part.instrument is None
     assert report.features == []
@@ -129,7 +129,7 @@ def test_part_with_neither_a_part_word_nor_an_instrument_folder_warns_and_reads_
 
 
 def test_folder_that_names_no_instrument_is_an_unknown_slot_not_a_disagreement(tmp_path):
-    report = parse_part(place(tmp_path, "AJC 2026", "Synthetic Tune - Violin"))
+    report = parse_part(place(tmp_path, "loose files", "Synthetic Tune - Violin"))
 
     assert (report.part.instrument, report.part.relation) == ("Violin", "unknown")
     assert report.warnings == []
@@ -137,6 +137,104 @@ def test_folder_that_names_no_instrument_is_an_unknown_slot_not_a_disagreement(t
 
 def test_page_without_drawn_staves_warns_instead_of_reading_nothing_silently(tmp_path):
     report = parse_part(place(tmp_path, "trumpet-1", "Synthetic Tune Trpt1", FIXTURES / "scan_300dpi.pdf"))
+
+    assert report.features == []
+    assert any(w.startswith("no staves found") for w in report.warnings)
+
+
+@pytest.mark.parametrize(
+    ("name", "instrument", "chairs"),
+    [
+        ("Synthetic Tune Tuba copy", "Tuba", []),
+        ("Synthetic Tune Tuba (copy)", "Tuba", []),
+        ("Synthetic Tune Tuba.pdf", "Tuba", []),
+        ("Synthetic Tune Trombone II", "Trombone", [2]),
+        ("Synthetic Tune Tenor sax 1 & 2", "Tenor Sax", [1, 2]),
+        ("Synthetic Tune - Trumpet 1 2026", "Trumpet", [1]),
+        ("Synthetic Tune Bass Gtr", "Electric Bass", []),
+        ("Synthetic Tune AltoSaxes1-2", "Alto Sax", [1, 2]),
+        ("Synthetic Tune BariSax", "Baritone Sax", []),
+    ],
+)
+def test_noise_after_the_part_word_and_chair_tokens_do_not_hide_it(tmp_path, name, instrument, chairs):
+    report = parse_part(place(tmp_path, "somewhere", name))
+
+    assert (report.part.instrument, report.part.chairs, report.part.instrument_from) == (instrument, chairs, "filename")
+    assert report.title == "Synthetic Tune"
+
+
+def test_the_filename_wins_over_the_folder_even_with_a_copy_suffix(tmp_path):
+    report = parse_part(place(tmp_path, "trombone-3", "Synthetic Tune Tuba copy"))
+
+    assert (report.part.instrument, report.part.relation) == ("Tuba", "doubling")
+    assert report.part.note == "player slot trombone-3 (Trombone) plays Tuba"
+
+
+def test_both_chairs_of_a_combined_file_in_one_chairs_folder_are_kept(tmp_path):
+    report = parse_part(place(tmp_path, "alto-sax-2", "Synthetic Tune AltoSaxes1-2"))
+
+    assert (report.part.chairs, report.part.relation) == ([1, 2], "same")
+
+
+@pytest.mark.parametrize(
+    ("folder", "name", "relation"),
+    [
+        ("bass", "Bass Guitar", "same"),  # Bass and Electric Bass are one seat
+        ("bass", "Bass Gtr", "same"),
+        ("keys", "Keyboard", "same"),
+        ("keys", "piano", "doubling"),
+        ("keys", "Organ", "doubling"),
+        ("piano", "KeyboardSynth", "doubling"),
+        ("viola", "Violin", "doubling"),
+        ("piano", "Rhythm", "doubling"),  # a generic rhythm part fits any rhythm-section slot
+        ("vocals", "piano", "doubling"),  # the vocal score's accompaniment
+        ("tenor-sax-2", "Trombone", "unexplained"),
+        ("trumpet-3", "Trombone3", "unexplained"),
+        ("guitar", "Bass Guitar", "unexplained"),
+    ],
+)
+def test_same_family_pairs_are_never_unexplained_but_cross_family_ones_are(tmp_path, folder, name, relation):
+    report = parse_part(place(tmp_path, folder, f"Synthetic Tune {name}"))
+
+    assert report.part.relation == relation
+    assert (report.warnings == []) == (relation != "unexplained")
+
+
+def test_combined_name_reports_its_first_instrument_and_the_others(tmp_path):
+    report = parse_part(place(tmp_path, "keys", "Synthetic Tune KeyboardSynth"))
+
+    assert (report.part.instrument, report.part.also) == ("Keyboard", ["Synthesizer"])
+
+
+def test_right_instrument_in_the_wrong_chair_folder_is_noted_not_warned(tmp_path):
+    report = parse_part(place(tmp_path, "trumpet-3", "Synthetic Tune Trpt1"))
+
+    assert report.part.relation == "same"
+    assert report.part.note == "player slot trumpet-3 is chair 3; the part is chair 1"
+    assert report.warnings == []
+
+
+def test_time_signature_is_not_a_multi_bar_rest_but_a_real_rest_still_counts(tmp_path):
+    report = parse_part(place(tmp_path, "trumpet-1", "Synthetic Tune Trpt1"))
+
+    # The staff holds a staff-sized "44" (meter) and a staff-sized "4" (a four-bar rest).
+    assert solos(report)[0] == (1, 6, "A")
+    assert "plus 3 bars of multi-bar rests" in " ".join(report.features[0].reasons)
+
+
+ONE_LINE = FIXTURES / "part_one_line.pdf"
+
+
+def test_percussion_part_with_one_line_staves_is_read(tmp_path):
+    report = parse_part(place(tmp_path, "percussion", "Synthetic Tune Sleigh Bells", ONE_LINE))
+
+    assert report.warnings == []
+    assert solos(report) == [(1, 7, "A")]
+    assert {f.instrument for f in report.features} == {"Sleigh Bells"}
+
+
+def test_a_lone_rule_is_no_staff_for_a_non_percussion_part(tmp_path):
+    report = parse_part(place(tmp_path, "trumpet-1", "Synthetic Tune Trpt1", ONE_LINE))
 
     assert report.features == []
     assert any(w.startswith("no staves found") for w in report.warnings)

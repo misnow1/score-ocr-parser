@@ -4,6 +4,7 @@ A part has no label column, so its staves are found from the long horizontal
 rules drawn for staff lines, and its barlines from the short vertical rules
 that run from a staff's top line to its bottom line. A part prints a bar number
 at the start of each staff only, and a multi-bar rest as a staff-sized numeral.
+A percussion part may draw one-line staves, accepted only when asked for.
 """
 
 from dataclasses import dataclass
@@ -17,7 +18,10 @@ from .systems import System, place_rows
 STAFF_LINE_GAP = 12.0  # staff lines are closer than this; the next staff is further
 MIN_STAFF_LINES = 3  # a run of fewer long rules is a rule under a title, not a staff
 BARLINE_END_TOLERANCE = 2.0  # a barline runs from the top staff line to the bottom one
+ONE_LINE_HALF = 10.0  # a one-line staff is taken as this far above and below its line
+MIN_ONE_LINE_BARLINES = 2  # a lone rule with fewer barlines through it is no staff
 START_REACH = 30.0  # a bar number this near the staff's left end numbers its first bar
+TIME_SIGNATURE_REACH = 80.0  # staff-sized digits this near the staff's left end are the meter
 REST_NUMERAL_HEIGHT = 1.5  # a digit this many staff heights tall is a multi-bar rest's count
 
 
@@ -26,6 +30,7 @@ class PartStaff:
     top: float
     bottom: float
     left: float
+    one_line: bool = False
 
     @property
     def centre(self) -> float:
@@ -39,55 +44,73 @@ class PartStaff:
         """How far a token's box reaches into the staff's vertical span."""
         return min(tok.y1, self.bottom) - max(tok.y0, self.top)
 
+    def barlines(self, page: Page) -> list[float]:
+        """The x of every rule that is a barline of this staff."""
+        if self.one_line:
+            return [
+                x for x, y0, y1 in page.short_rules
+                if y0 - BARLINE_END_TOLERANCE <= self.centre <= y1 + BARLINE_END_TOLERANCE
+                and y1 - y0 <= 2 * ONE_LINE_HALF
+            ]
+        return [
+            x for x, y0, y1 in page.short_rules
+            if abs(y0 - self.top) <= BARLINE_END_TOLERANCE and abs(y1 - self.bottom) <= BARLINE_END_TOLERANCE
+        ]
 
-def part_staves(page: Page) -> list[PartStaff]:
+
+def part_staves(page: Page, one_line: bool = False) -> list[PartStaff]:
     """Each staff on a part page, top to bottom: a run of at least
-    MIN_STAFF_LINES long horizontal rules, each within STAFF_LINE_GAP of the last."""
+    MIN_STAFF_LINES long horizontal rules, each within STAFF_LINE_GAP of the last.
+    With `one_line`, a single rule with barlines through it is a staff too."""
     runs: list[list[tuple[float, float, float]]] = []
     for line in sorted(page.staff_lines):
         if runs and line[0] - runs[-1][-1][0] <= STAFF_LINE_GAP:
             runs[-1].append(line)
         else:
             runs.append([line])
-    return [
-        PartStaff(run[0][0], run[-1][0], min(x0 for _, x0, _ in run))
-        for run in runs
-        if len(run) >= MIN_STAFF_LINES
-    ]
+    staves = []
+    for run in runs:
+        left = min(x0 for _, x0, _ in run)
+        if len(run) >= MIN_STAFF_LINES:
+            staves.append(PartStaff(run[0][0], run[-1][0], left))
+        elif one_line and len(run) == 1:
+            y = run[0][0]
+            staff = PartStaff(y - ONE_LINE_HALF, y + ONE_LINE_HALF, left, one_line=True)
+            if len(merge_barlines(staff.barlines(page))) >= MIN_ONE_LINE_BARLINES:
+                staves.append(staff)
+    return staves
 
 
 def _rest_numerals(page: Page, staves: list[PartStaff]) -> list[tuple[Token, int]]:
     """(token, staff index) of each staff-sized digit sitting on a staff: the
     count of a multi-bar rest, whether set in a music font (a glyph) or not.
-    Text-sized digits (tuplets, bar numbers) are not."""
+    Text-sized digits (tuplets, bar numbers) are not, and neither is a digit
+    near the staff's left end, where the time signature sits."""
     found = []
     for tok in [*page.tokens, *page.glyphs]:
         if not (tok.text.isdigit() and len(tok.text) <= 2):
             continue
         index = max(range(len(staves)), key=lambda i: staves[i].overlap(tok))
         staff = staves[index]
-        if staff.overlap(tok) > 0 and tok.y1 - tok.y0 >= REST_NUMERAL_HEIGHT * staff.height:
+        near_start = (tok.x0 + tok.x1) / 2 < staff.left + TIME_SIGNATURE_REACH
+        if staff.overlap(tok) > 0 and not near_start and tok.y1 - tok.y0 >= REST_NUMERAL_HEIGHT * staff.height:
             found.append((tok, index))
     return found
 
 
-def find_part_systems(page: Page, label: str) -> list[System]:
+def find_part_systems(page: Page, label: str, one_line: bool = False) -> list[System]:
     """The staves of a part page, one system each, every staff labelled `label`.
     Text above the first staff by more than a bar number's reach (the title, the
     instrument heading) is page furniture and is left out; a printed number
     counts as a bar number only at the start of its staff."""
-    staves = part_staves(page)
+    staves = part_staves(page, one_line)
     if not staves:
         return []
     systems = []
     for i, staff in enumerate(staves):
-        ends = [
-            x for x, y0, y1 in page.short_rules
-            if abs(y0 - staff.top) <= BARLINE_END_TOLERANCE and abs(y1 - staff.bottom) <= BARLINE_END_TOLERANCE
-        ]
         systems.append(System(
             page.number, i, [Staff(label, staff.centre)], source=page.source,
-            barlines=merge_barlines([staff.left, *ends]), rule_y=staff.centre,
+            barlines=merge_barlines([staff.left, *staff.barlines(page)]), rule_y=staff.centre,
         ))
     for above, below in zip(systems, systems[1:]):
         below.joins_previous = share_barlines(page.barlines, above.rule_y, below.rule_y)

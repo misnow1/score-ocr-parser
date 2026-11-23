@@ -171,6 +171,7 @@ class PartInfo:
     slot_instrument: str | None = None  # what the folder name resolves to
     relation: SlotRelation = "unknown"
     note: str = ""  # "player slot alto-sax-1 (Alto Sax) plays Clarinet" for a doubling
+    also: list[str] = field(default_factory=list)  # further instruments of a combined name ("KeyboardSynth")
 
 
 @dataclass

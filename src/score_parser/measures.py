@@ -154,11 +154,16 @@ class BarCount:
                 return BarReading(bar, "counted", f"nearest bar number {number}")
             plural = "barline" if away == 1 else "barlines"
             direction = "back from" if i < idx else "from"
-            return BarReading(bar, "counted", f"counted {away} {plural} {direction} printed bar {number}: bar {bar}")
+            rests = abs(self._extra_before(i) - self._extra_before(idx))
+            plus = f" plus {rests} bars of multi-bar rests" if rests else ""
+            return BarReading(bar, "counted", f"counted {away} {plural}{plus} {direction} printed bar {number}: bar {bar}")
         if self.carried is not None:
             bar = self.carried + i + self._extra_before(i)
+            rests = self._extra_before(i)
+            plus = f" plus {rests} bars of multi-bar rests" if rests else ""
             return BarReading(
-                bar, "continued", f"no bar number printed here; counted barlines on from {self.carried_from}: bar {bar}"
+                bar, "continued",
+                f"no bar number printed here; counted barlines{plus} on from {self.carried_from}: bar {bar}",
             )
         return None
 

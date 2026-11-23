@@ -846,7 +846,7 @@ def folded_solos(music_font: Path, out: Path) -> None:
 
 
 PART_STAFF_TOP = 150
-PART_BARLINES = (60, 160, 260, 360, 460, 560)  # five bars per system
+PART_BARLINES = (60, 220, 320, 400, 480, 560)  # five bars per system
 
 
 def _part_system(page, top: float, glyph_font: Path, texts) -> None:
@@ -874,9 +874,10 @@ def one_staff_part(glyph_font: Path, out: Path) -> None:
     p1.insert_text((50, 95), "Trumpet 1", fontname="helv", fontsize=14)
     top = PART_STAFF_TOP
     _part_system(p1, top, glyph_font, [
-        (120, top + 14, "4", 40),
+        (100, top + 14, "44", 40),  # a time signature set staff-sized: not a rest
+        (165, top + 14, "4", 40),  # a four-bar rest
         (200, top - 18, "A", 12), (230, top - 18, "VERSE 1", 10),
-        (285, top - 8, "SOLO", 9),
+        (340, top - 8, "SOLO", 9),
     ])
     _part_system(p1, top + 150, glyph_font, [
         (50, top + 139, "9", 7),
@@ -886,8 +887,25 @@ def one_staff_part(glyph_font: Path, out: Path) -> None:
     p2 = doc.new_page(width=612, height=792)
     _part_system(p2, top, glyph_font, [
         (50, top - 11, "14", 7),
-        (285, top - 8, "SOLO", 9),
+        (340, top - 8, "SOLO", 9),
     ])
+    doc.save(out)
+
+
+def one_line_part(out: Path) -> None:
+    """A percussion part: one-line staves with short barlines, and a long rule
+    under the title that is no staff. Mark A on the first staff; the second
+    prints bar number 6 at its start and holds a solo in its second bar (bar 7)."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Bells Tune", fontname="helv", fontsize=24)
+    page.draw_line((50, 80), (560, 80))  # a rule under the title
+    for y, texts in ((200, [(200, 178, "A", 12)]), (350, [(50, 339, "6", 7), (180, 338, "SOLO", 9)])):
+        page.draw_line((60, y), (560, y))
+        for x in (60, 160, 260, 360, 460, 560):
+            page.draw_line((x, y - 5), (x, y + 5))
+        for x, ty, text, size in texts:
+            page.insert_text((x, ty), text, fontname="helv", fontsize=size)
     doc.save(out)
 
 
@@ -964,6 +982,7 @@ def main() -> None:
         glyphs = Path(tmp) / "SynGlyphs.ttf"
         build_music_font(glyphs, family="SynGlyphs", chars="&b")
         one_staff_part(glyphs, OUT / "part_one_staff.pdf")
+        one_line_part(OUT / "part_one_line.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     scanned(OUT / "label_repair_ocr_misreads.pdf", OUT / "scan_label_misreads.pdf", 300)

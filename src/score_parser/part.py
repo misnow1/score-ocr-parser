@@ -3,45 +3,77 @@
 The instrument comes from the filename's trailing part word, through the alias
 table; the instrument folder the part sits in is its player slot (who plays
 it). A folder that names a different instrument is reported as a doubling when
-the slot's player is known to cover it, else as an unexplained disagreement,
-never corrected: only show knowledge can say who plays what. `show_context` is
-where that knowledge will plug in (a future release); it is not read yet.
+the two are in one family or listed together, else as an unexplained
+disagreement, never corrected: only show knowledge can say who plays what.
+`show_context` is where that knowledge will plug in (a future release); it is
+not read yet.
 """
 
 import re
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
 from .clean import clean
 from .data import load
 from .features import features_in
-from .instruments import Resolved, Roster, resolve
+from .instruments import Resolved, Roster, present_as, resolve
 from .models import InstrumentFrom, PageInfo, ParseOptions, PartInfo, PartReport, SlotRelation
-from .source import read_pages, scan_warnings
 from .part_systems import find_part_systems
+from .source import read_pages, scan_warnings
 from .title import clean_filename
 
-MAX_PART_WORDS = 4  # the part word is at most this many trailing words ("Sleigh Bells")
+MAX_PART_WORDS = 6  # the part word is at most this many trailing words, chair tokens included ("Tenor sax 1 & 2")
 _DIGIT_AFTER_LETTER = re.compile(r"(?<=[A-Za-z])(?=\d)")  # "Trpt1", "sax1-2"
+_PDF_REMNANT = re.compile(r"(?:\.pdf)+$", re.I)
+_PAREN_NOISE = re.compile(r"[(\[]\s*(?:copy|\d+)\s*[)\]]", re.I)
+_NOISE_WORD = re.compile(r"^(?:copy|score|part|parts|final|draft|ajc|(?:19|20)\d{2})$", re.I)
+_DASHES = ("-", "–")
+
+
+@dataclass
+class _Word:
+    text: str
+    start: int  # where it starts in the filename stem
 
 
 @cache
-def _known_doublings() -> dict[str, frozenset[str]]:
-    return {slot: frozenset(names) for slot, names in load("part_doublings.yaml")["doublings"].items()}
+def _doubling_data() -> dict:
+    data = load("part_doublings.yaml")
+    return {
+        "families": [frozenset(f) for f in data["families"]],
+        "pairs": {slot: frozenset(names) for slot, names in data["pairs"].items()},
+        "generic": frozenset(data["generic_parts"]),
+        "one_line": frozenset(data["one_line_staves"]),
+    }
+
+
+def _words(stem: str) -> list[_Word]:
+    """The words of a filename stem that may name a part: noise words (copy,
+    score, part, a year), "(copy)" and "(1)", dashes and a ".pdf" remnant are out."""
+    stem = _PDF_REMNANT.sub("", stem)
+    blanked = _PAREN_NOISE.sub(lambda m: " " * len(m.group()), stem)
+    return [
+        _Word(m.group(), m.start())
+        for m in re.finditer(r"[^\s_]+", blanked)
+        if m.group() not in _DASHES and not _NOISE_WORD.match(m.group())
+    ]
 
 
 def _part_word(stem: str) -> tuple[Resolved, str] | None:
-    """(the instrument named by the trailing words of a filename, the words
-    before them). The longest run of trailing words that resolves wins, so "Bass
-    Gtr" is not "Gtr"; a run that starts with a bare number is no part word."""
-    words = re.split(r"[\s_]+|\s*[-–]\s+", stem.strip())
-    for n in range(min(MAX_PART_WORDS, len(words)), 0, -1):
-        tail = words[-n:]
-        if tail[0].isdigit():
-            continue
-        hit = resolve(_DIGIT_AFTER_LETTER.sub(" ", " ".join(tail)))
-        if hit and not hit.also:
-            return hit, " ".join(words[:-n])
+    """(the instrument named at the end of a filename, the stem before it).
+    Windows end at the last word or the one before it; the longest run of
+    words that resolves wins, so "Bass Gtr" is not "Gtr", and a run that starts
+    with a bare number is no part word."""
+    words = _words(stem)
+    for end in (len(words), len(words) - 1):
+        for n in range(min(MAX_PART_WORDS, end), 0, -1):
+            window = words[end - n : end]
+            if window[0].text.isdigit():
+                continue
+            hit = resolve(_DIGIT_AFTER_LETTER.sub(" ", " ".join(w.text for w in window)))
+            if hit:
+                return hit, stem[: window[0].start]
     return None
 
 
@@ -51,17 +83,39 @@ def _slot(folder: str) -> Resolved | None:
     return resolve(re.sub(r"-(?=\d)", " ", name, count=1))
 
 
-def _relation(slot: Resolved | None, folder: str, instrument: str) -> tuple[SlotRelation, str]:
-    """How the player slot relates to the part's instrument, with a note for a
-    doubling or an unexplained disagreement."""
+def _rank(slot: Resolved, instrument: Resolved) -> int:
+    """0: the slot's own instrument (or a variant of it); 1: a doubling (one
+    family, a listed pair, or a generic part of the slot's family); 2: no
+    known relation."""
+    data = _doubling_data()
+    if present_as(instrument.name, [slot.name]):
+        return 0
+    generic = instrument.name in data["generic"] and instrument.family == slot.family
+    listed = instrument.name in data["pairs"].get(slot.name, ())
+    if generic or listed or any(slot.name in f and instrument.name in f for f in data["families"]):
+        return 1
+    return 2
+
+
+def _relation(slot: Resolved | None, folder: str, parts: list[Resolved]) -> tuple[SlotRelation, str]:
+    """How the player slot relates to the part's instruments (the closest one
+    counts), with a note for a doubling or an unexplained disagreement."""
     if slot is None:
         return "unknown", ""
-    if slot.name == instrument:
-        return "same", ""
+    rank, name = min((_rank(slot, p), p.name) for p in parts)
     where = f"player slot {folder} ({slot.name})"
-    if instrument in _known_doublings().get(slot.name, ()):
-        return "doubling", f"{where} plays {instrument}"
-    return "unexplained", f"{where} holds a {instrument} part: unexplained disagreement, left as filed"
+    if rank == 0:
+        return "same", ""
+    if rank == 1:
+        return "doubling", f"{where} plays {name}"
+    return "unexplained", f"{where} holds a {name} part: unexplained disagreement, left as filed"
+
+
+def _chair_note(slot: Resolved | None, folder: str, chairs: list[int]) -> str:
+    """A note when the part's chairs and the slot's chair share none."""
+    if slot is None or not slot.chairs_given or not chairs or set(slot.chairs) & set(chairs):
+        return ""
+    return f"player slot {folder} is chair {', '.join(map(str, slot.chairs))}; the part is chair {', '.join(map(str, chairs))}"
 
 
 def _label(name: str, chairs: list[int]) -> str:
@@ -83,9 +137,15 @@ def read_part_info(path: Path) -> tuple[PartInfo, str]:
     title = clean_filename(named[1] if named else path.stem)
     if hit is None:
         return PartInfo(None, [], None, folder, relation="unknown"), title
-    relation, note = _relation(slot, folder, hit.name) if named else ("same", "")
     chairs = hit.chairs if hit.chairs_given else []
-    return PartInfo(hit.name, chairs, source, folder, slot.name if slot else None, relation, note), title
+    relation, note = _relation(slot, folder, hit.parts()) if named else ("same", "")
+    if relation == "same":
+        note = _chair_note(slot, folder, chairs)
+    info = PartInfo(
+        hit.name, chairs, source, folder, slot.name if slot else None, relation, note,
+        also=[p.name for p in hit.also],
+    )
+    return info, title
 
 
 def parse_part(
@@ -109,7 +169,8 @@ def parse_part(
     if info.instrument:
         roster = Roster({info.instrument: set(info.chairs) or {1}})
         label = _label(info.instrument, info.chairs)
-        systems = [s for page in pages for s in find_part_systems(page, label)]
+        one_line = bool({info.instrument, *info.also} & _doubling_data()["one_line"])
+        systems = [s for page in pages for s in find_part_systems(page, label, one_line)]
         if not systems:
             warnings.append("no staves found: the part has no drawn staff lines to read solos from")
         features, found = features_in(systems, roster)
