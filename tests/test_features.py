@@ -144,7 +144,7 @@ def test_chord_text_glued_to_solo_wording_is_stripped_and_never_makes_a_feature(
     report = parse_score(FIXTURES / "finale_chord_text_solos.pdf")
 
     got = sorted((f.instrument, f.page, f.raw_text) for f in report.features)
-    # several chords before a bare "Solo" (glued "F#min7(b5)/EE9 Solo", "E9 Dm7Solo" is one) are a chart label, not a feature,
+    # several chords before a bare "Solo" (glued "Bbmaj7(b5)/GA9 Solo", "E9 Dm7Solo" is one) are a chart label, not a feature,
     # nor is a lone chord ("G7C"); named solos keep their wording without the chords
     assert got == [
         ("Alto Sax", 1, "ALTO SOLO"),

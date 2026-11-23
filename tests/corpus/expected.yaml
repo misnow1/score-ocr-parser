@@ -90,25 +90,20 @@ scores:
   "HOLIDAY IN 11_3_26 - Score ":
     # The violin is a separate part file, so the score shows only the piano staff.
     instruments: [Piano]
-    # One feature: a violin solo in bars 56-64 (bar 48 starts an 8-measure rest, not the solo).
+    # One feature: a violin solo (p5, bar 56).
     max_features: 1
     features:
       - {instrument: Violin, page: 5, bar: 56, xfail: "the violin is now reported on p5 as a possible feature, but at bar 48: barlines cannot be counted there (bar kind nearest), so the nearest printed number is the bar that starts the 8-measure rest; order and section are right"}
 
   "I HEARD THE BELLS ON CHRISTMAS DAY- SCORE.":
-    # Seven features: six vocal cues over the SATB staves (a choir label stays out of the
-    # instrument table) and one clarinet solo. Pages only, apart from the first start bar.
+    # Seven features: six vocal cues and one clarinet solo. Pages only, apart from the first bar.
     max_features: 7
     features:
-      # One vocal solo (first time), all in unison on the repeat; it starts before the repeat and carries to p2.
       - {instrument: Vocal, kind: vocal, page: 1, bar: 4}
-      # A tenor/bass-line vocal solo.
       - {instrument: Vocal, kind: vocal, page: 5}
-      # "Solo or All": left to the conductor or vocalist.
       - {instrument: Vocal, kind: vocal, page: 6}
       - {instrument: Vocal, kind: vocal, page: 10}
       - {instrument: Vocal, kind: vocal, page: 12}
-      # The p13 marking is on the TB line of the SATB staves, not the piano.
       - {instrument: Vocal, kind: vocal, page: 13}
       - {instrument: Clarinet, page: 16}
     not_features:
@@ -155,10 +150,7 @@ scores:
       - Piano
       - Bass
       - Drums
-    # One feature: a group of solos over bars 45-77 inside a repeat (the "(SOLOS)" marking is printed
-    # over every staff but the organ and drums; bar 77 is marked "lead only"). Who plays is not clear, so
-    # it is one open solo with no instrument. The tool reports it once (p2, bar 45); the guitar solo built
-    # from chord text (p4, bar 93) is dropped (two chords before a bare "Solo").
+    # One feature: an open solo with no instrument (p2, bar 45).
     max_features: 1
     features:
       - {open: true, page: 2, bar: 45}
