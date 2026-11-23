@@ -76,18 +76,32 @@ scores:
 
   "Winter Wonderland JC2026 SCORE NOT FINAL":
     instruments: [Soprano Sax, Clarinet, Trumpet]
-    # One shared feature and seven vocal leads; no other instrument solos.
-    max_features: 8
+    # Nine features: one shared marking at A, a clarinet solo at F and seven vocal leads (a lead that
+    # runs over a page turn is one feature, so the tool's duplicate on p7 makes its count 8 against 9
+    # real ones; a female harmony over the male lead on p5 is not a lead of its own).
+    max_features: 9
     features:
       - {instruments: [Clarinet, Soprano Sax, Trumpet], kind: shared, page: 1, bar: 9, mark: A, xfail: "marker A m9 is read (p1, bar 9, mark A) on the Clarinet feature; Soprano Sax and Trumpet 3 carry no marking text at that place, so they are not reported with it"}
       # Vocal leads are features of kind "vocal lead" with a voice, not instruments.
       - {instrument: Vocal, kind: vocal, voice: female, page: 3, mark: B}
       - {instrument: Vocal, kind: vocal, voice: male, page: 3, mark: C, xfail: "the male lead is reported on p4, not p3 at C"}
-      - {instrument: Vocal, kind: vocal, voice: female, mark: D}
+      # Female from 4 bars after D, running through E (p6-7).
+      - {instrument: Vocal, kind: vocal, voice: female, page: 6, mark: D}
+      - {instrument: Clarinet, page: 8, mark: F, xfail: "no solo wording: the only marking is the word CLARINET above the staff over the sax group"}
+      # At H the male takes over from the female and the backing vocals, then the female returns 4 bars later.
       - {instrument: Vocal, kind: vocal, voice: male, page: 10, mark: H, xfail: "the male lead at H is not found; only the female lead at H + 4 is"}
       - {instrument: Vocal, kind: vocal, voice: female, page: 10, mark: H}
-      - {instrument: Vocal, kind: vocal, voice: male, page: 15}
+      - {instrument: Vocal, kind: vocal, voice: male, page: 15, mark: M}
       - {instrument: Vocal, kind: vocal, voice: female, page: 16}
+    # Order the tool already gets right (the clarinet at F and the male at H are not reported, so not listed).
+    order:
+      - {instrument: Clarinet, page: 1, mark: A}
+      - {instrument: Vocal, voice: female, page: 3, mark: B}
+      - {instrument: Vocal, voice: male, mark: C}
+      - {instrument: Vocal, voice: female, mark: D}
+      - {instrument: Vocal, voice: female, page: 10, mark: H}
+      - {instrument: Vocal, voice: male, page: 15, mark: M}
+      - {instrument: Vocal, voice: female, page: 16}
 
   "ERGUE A CASA 10.22.26 - Piano":
     instruments: [Trumpet, Alto Sax, Trombone, Organ, Guitar, Electric Bass, Drums]
