@@ -40,6 +40,7 @@ BAR_EVIDENCE: dict[BarKind, float] = {
     "ocr": BAR_GUESSED,  # barlines cannot be counted on a scan
     "missing": 0.0,
 }
+MARK_CARRIED = 0.05  # penalty: the rehearsal mark is carried from an earlier page, not printed on the feature's own
 CHORD_ONLY_WORDING = 0.1  # penalty: the wording was a chord plus a bare "Solo"
 CHORD_ONLY_REASON = "wording was only chord text plus 'Solo'"
 INSTRUMENT_ABSENT = 0.1  # named in the text but not in the instrumentation: a possible feature
@@ -142,6 +143,7 @@ class Candidate:
     bar: int | None
     bar_kind: BarKind
     mark: str | None
+    mark_from: int | None  # the page a carried mark is printed on; None when it is on the candidate's own page
     staff: str  # the staff below the text; empty when the text names an absent instrument
     chair: int | None = None
     chair_from: "ChairFrom | None" = None
@@ -191,6 +193,14 @@ class SystemContext(NamedTuple):
     @property
     def system(self) -> System:
         return self.systems[self.index]
+
+
+def _mark_in_force(systems: list[System], system: System, x: float) -> tuple[str | None, int | None]:
+    """(mark, page it is printed on if that is not the system's own page) at x on `system`."""
+    reading = current_mark(systems, system, x)
+    if reading is None:
+        return None, None
+    return reading.text, reading.page if reading.page != system.page else None
 
 
 def _candidate(
@@ -266,6 +276,7 @@ def _candidate(
                 notes.append(check.problem)
     reading = system.bar_at(phrase.x0)
     reasons.append(reading.reason)
+    mark, mark_from = _mark_in_force(context.systems, system, phrase.x0)
     return Candidate(
         kind=kind,
         text=text,
@@ -279,7 +290,8 @@ def _candidate(
         x=phrase.x0,
         bar=reading.bar,
         bar_kind=reading.kind,
-        mark=current_mark(context.systems, system, phrase.x0),
+        mark=mark,
+        mark_from=mark_from,
         staff=staff_label,
         chair=chair,
         chair_from=chair_from,
@@ -309,6 +321,7 @@ def _vocal_candidate(
     """A vocal lead, with the evidence for its voice (which may be none)."""
     system = context.system
     reading = system.bar_at(phrase.x0)
+    mark, mark_from = _mark_in_force(context.systems, system, phrase.x0)
     reasons = ["matched vocal lead wording", why, reading.reason]
     return Candidate(
         kind="vocal lead",
@@ -323,7 +336,8 @@ def _vocal_candidate(
         x=phrase.x0,
         bar=reading.bar,
         bar_kind=reading.kind,
-        mark=current_mark(context.systems, system, phrase.x0),
+        mark=mark,
+        mark_from=mark_from,
         staff="",
         voice=voice,
         section=section,
@@ -634,6 +648,8 @@ def build_feature(group: list[Candidate], others: list[list[Candidate]] | None =
     first_page, first_bar = locations[0].page, locations[0].bar
     first = next(c for c in group if (c.page, c.bar) == (first_page, first_bar))
     chair, ambiguous = _group_chair(group)
+    if first.mark_from:
+        reasons.append(f"mark carried from p{first.mark_from}")
     if len(group) > 1:
         reasons.append(f"merged {len(group)} copies of the same marking")
     if others:
@@ -647,8 +663,9 @@ def build_feature(group: list[Candidate], others: list[list[Candidate]] | None =
         page=first_page,
         bar=first_bar,
         rehearsal_mark=first.mark,
+        mark_carried_from=first.mark_from,
         raw_text=lead.text,
-        confidence=round(lead.confidence, 2),
+        confidence=round(lead.confidence - (MARK_CARRIED if first.mark_from else 0.0), 2),
         reasons=reasons,
         locations=locations,
         voice=lead.voice,
@@ -669,4 +686,22 @@ def find_features(
     count_bars(systems)
     candidates, warnings = collect_candidates(systems, roster)
     sets = join_shared(merge_candidates(fold_copies(candidates)))
-    return [build_feature(s[0], s[1:]) for s in sets], warnings
+    return in_score_order([(build_feature(s[0], s[1:]), s) for s in sets]), warnings
+
+
+def in_score_order(built: list[tuple[Feature, list[list[Candidate]]]]) -> list[Feature]:
+    """Features by page, then bar, then where the first copy sits: its system
+    in reading order, then x (ADR 0003). A feature with no bar follows the
+    barred ones on its page, so that fallback is page, system, x. The first
+    copy is the earliest one at the feature's first location; a later reminder
+    never moves a feature. The sort is stable, so ties keep reading order."""
+
+    def key(item: tuple[Feature, list[list[Candidate]]]) -> tuple[int, bool, int, int, float]:
+        feature, sets = item
+        first = min(
+            (c for group in sets for c in group if (c.page, c.bar) == (feature.page, feature.bar)),
+            key=lambda c: (c.system_index, c.x),
+        )
+        return feature.page, feature.bar is None, feature.bar or 0, first.system_index, first.x
+
+    return [feature for feature, _ in sorted(built, key=key)]

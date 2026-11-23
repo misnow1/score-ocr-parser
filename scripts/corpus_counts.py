@@ -2,7 +2,8 @@
 
 Local helper. Numbers only: one row per score (by sorted position), with
 counts of instruments, features, features with no bar, features with no
-instrument and warnings. Writes nothing. Pass --names to also print each
+instrument, features with no rehearsal mark, features whose mark is carried
+from an earlier page, and warnings. Writes nothing. Pass --names to also print each
 file name.
 
     uv run python scripts/corpus_counts.py [DIR]    # default: $SCORE_CORPUS_DIR
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from score_parser import parse_score
 
-COLUMNS = ("instruments", "features", "no_bar", "no_instrument", "warnings")
+COLUMNS = ("instruments", "features", "no_bar", "no_instrument", "no_mark", "carried", "warnings")
 
 
 def counts(report) -> tuple[int, ...]:
@@ -25,6 +26,8 @@ def counts(report) -> tuple[int, ...]:
         len(features),
         sum(f.bar is None for f in features),
         sum(f.instrument is None for f in features),
+        sum(f.rehearsal_mark is None for f in features),
+        sum(f.mark_carried_from is not None for f in features),
         len(report.warnings),
     )
 

@@ -58,3 +58,66 @@ def test_yaml_is_written_only_when_asked_and_json_alongside_with_both(tmp_path):
 
     main(["parse", str(SOLOS), "--out", str(out), "--format", "both"])
     assert sorted(p.suffix for p in out.iterdir()) == [".json", ".yaml"]
+
+
+CARRY = FIXTURES / "finale_mark_carry.pdf"
+
+
+def test_steps_are_grouped_under_their_rehearsal_mark_in_score_order():
+    report = parse_score(CARRY)
+
+    assert [(s.instrument, s.mark) for s in report.flow] == [
+        ("trombone", None),  # before the first mark of the score
+        ("alto sax", "A"),
+        ("guitar", "A"),  # carried from page 1
+        ("drums", "B"),
+        ("trumpet", "B"),  # carried from page 3
+    ]
+
+
+def test_draft_puts_one_header_comment_per_section_and_a_todo_under_no_section(tmp_path):
+    _, text = written_yaml(tmp_path, pdf=CARRY)
+
+    lines = text.splitlines()
+    headers = [ln for ln in lines if ln.startswith("  # Section ") or ln.startswith("  # (no section)")]
+    assert headers == ["  # (no section)", "  # Section A", "  # Section B"]
+    no_section = lines.index("  # (no section)")
+    assert "Trombone" in lines[no_section + 1]
+    assert lines[no_section + 2] == "    # TODO(score-parser): no rehearsal mark found: section unknown"
+    assert text.count("# TODO(score-parser)") == 1  # only the no-section step; every step is confident
+    a = lines.index("  # Section A")
+    assert "Alto Sax" in lines[a + 1] and "Guitar" in lines[a + 2]  # both A steps under one header
+    assert lines[a + 3] == "  # Section B"
+
+
+def test_a_step_with_no_mark_has_a_todo_in_the_report_too():
+    report = parse_score(CARRY)
+
+    assert [(s.instrument, s.todo) for s in report.flow if s.todo] == [
+        ("trombone", "no rehearsal mark found: section unknown")
+    ]
+
+
+def test_a_no_mark_step_with_low_confidence_keeps_both_reasons():
+    report = parse_score(FIXTURES / "finale_chord_text_solos.pdf")
+
+    step = next(s for s in report.flow if s.todo and s.mark is None and "low confidence" in s.todo)
+    assert step.todo.endswith("; no rehearsal mark found: section unknown")
+
+
+def test_grouping_keeps_the_planner_step_shape(tmp_path):
+    _, text = written_yaml(tmp_path, pdf=CARRY)
+
+    flow = yaml.safe_load(text)["flow"]
+    assert len(flow) == 5
+    for step in flow:
+        assert set(step) == {"section", "instrument", "note"}
+
+
+def test_note_says_when_the_mark_is_carried(tmp_path):
+    _, text = written_yaml(tmp_path, pdf=CARRY)
+
+    flow = {s["instrument"]: s for s in yaml.safe_load(text)["flow"]}
+    assert "rehearsal A (carried from page 1)" in flow["guitar"]["note"]
+    assert "carried" not in flow["alto sax"]["note"]
+    assert flow["guitar"]["section"] == "Guitar solo (A)"
