@@ -845,6 +845,52 @@ def folded_solos(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+PART_STAFF_TOP = 150
+PART_BARLINES = (60, 160, 260, 360, 460, 560)  # five bars per system
+
+
+def _part_system(page, top: float, glyph_font: Path, texts) -> None:
+    """One staff of a part: five lines, barlines, a clef-and-key glyph run
+    ("&bb") in a font the music-font list does not know, and texts."""
+    for i in range(5):
+        page.draw_line((60, top + 6 * i), (560, top + 6 * i))
+    for x in PART_BARLINES:
+        page.draw_line((x, top), (x, top + 24))
+    page.insert_text((62, top + 20), "&bb", fontfile=str(glyph_font), fontname="SynGlyphs", fontsize=14)
+    for x, y, text, size in texts:
+        page.insert_text((x, y), text, fontname="helv", fontsize=size)
+
+
+def one_staff_part(glyph_font: Path, out: Path) -> None:
+    """A one-instrument part, no label column: a title with the word Solo in it
+    and an instrument heading above the first staff, then three staves. The
+    first holds a four-bar rest (a staff-sized "4"), mark A beside the words
+    "VERSE 1" and a solo in its third interval (bar 6); the second prints
+    bar number 9 at its start and mark B; the staff on page 2 prints 14, carries
+    mark B and holds a solo in its third interval (bar 16)."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Solo Tune", fontname="helv", fontsize=24)
+    p1.insert_text((50, 95), "Trumpet 1", fontname="helv", fontsize=14)
+    top = PART_STAFF_TOP
+    _part_system(p1, top, glyph_font, [
+        (120, top + 14, "4", 40),
+        (200, top - 18, "A", 12), (230, top - 18, "VERSE 1", 10),
+        (285, top - 8, "SOLO", 9),
+    ])
+    _part_system(p1, top + 150, glyph_font, [
+        (50, top + 139, "9", 7),
+        (200, top + 132, "B", 12), (230, top + 132, "VERSE 2", 10),
+        (400, top + 160, "3", 9),  # a text-sized digit inside the staff span: a tuplet, not a rest
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _part_system(p2, top, glyph_font, [
+        (50, top - 11, "14", 7),
+        (285, top - 8, "SOLO", 9),
+    ])
+    doc.save(out)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
@@ -915,6 +961,9 @@ def main() -> None:
         shared_solos(font, OUT / "finale_shared_solos.pdf")
         absent_instrument_solo(font, OUT / "finale_absent_instrument_solo.pdf")
         folded_solos(font, OUT / "finale_folded_solos.pdf")
+        glyphs = Path(tmp) / "SynGlyphs.ttf"
+        build_music_font(glyphs, family="SynGlyphs", chars="&b")
+        one_staff_part(glyphs, OUT / "part_one_staff.pdf")
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     scanned(OUT / "label_repair_ocr_misreads.pdf", OUT / "scan_label_misreads.pdf", 300)

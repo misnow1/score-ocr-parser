@@ -127,20 +127,36 @@ class BarCount:
     anchors: list[tuple[int, int]] = field(default_factory=list)
     carried: int | None = None
     carried_from: str = "the previous system"
+    # Parts: a multi-bar rest is one interval that holds several bars; this
+    # maps the interval to the extra bars it holds.
+    skipped: dict[int, int] = field(default_factory=dict)
+
+    def add_rest(self, x: float, bars: int) -> None:
+        """A rest of `bars` bars drawn at x fills the interval it sits in."""
+        i = _interval(self.barlines, x)
+        self.skipped[i] = max(self.skipped.get(i, 0), bars - 1)
+
+    def _extra_before(self, i: int) -> int:
+        return sum(extra for k, extra in self.skipped.items() if k < i)
+
+    def bars_after(self, idx: int) -> int:
+        """Bars from the start of interval `idx` to the end of the row."""
+        return len(self.barlines) - 1 - idx + sum(e for k, e in self.skipped.items() if k >= idx)
 
     def bar_at(self, x: float) -> BarReading | None:
         i = _interval(self.barlines, x)
         if self.anchors:
             before = [a for a in self.anchors if a[0] <= i]
             idx, number = before[-1] if before else self.anchors[0]
-            bar, away = number + (i - idx), abs(i - idx)
+            bar = number + (i - idx) + self._extra_before(i) - self._extra_before(idx)
+            away = abs(i - idx)
             if away == 0:
                 return BarReading(bar, "counted", f"nearest bar number {number}")
             plural = "barline" if away == 1 else "barlines"
             direction = "back from" if i < idx else "from"
             return BarReading(bar, "counted", f"counted {away} {plural} {direction} printed bar {number}: bar {bar}")
         if self.carried is not None:
-            bar = self.carried + i
+            bar = self.carried + i + self._extra_before(i)
             return BarReading(
                 bar, "continued", f"no bar number printed here; counted barlines on from {self.carried_from}: bar {bar}"
             )
@@ -151,11 +167,12 @@ class BarCount:
 
     @property
     def bar_count(self) -> int:
-        return len(self.barlines) - 1
+        return self.bars_after(0)
 
 
 class HasRow(Protocol):
     bars: list[tuple[float, int, float]]
+    rests: list[tuple[float, int]]
     barlines: list[float]
     joins_previous: bool
     count: BarCount | None
@@ -189,9 +206,12 @@ def count_bars(systems: list[HasRow]) -> None:
             if (idx := snap_to_barline(barlines, x0, x1)) is not None
         )
         count = BarCount(barlines, anchors)
+        for s in row:
+            for x, bars in s.rests:
+                count.add_rest(x, bars)
         if anchors:
             idx, n = anchors[-1]
-            running = n + (count.bar_count - idx)
+            running = n + count.bars_after(idx)
         elif running is not None:
             count.carried = running
             if row is rows[0]:

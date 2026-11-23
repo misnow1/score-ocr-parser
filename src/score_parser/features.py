@@ -681,7 +681,14 @@ def find_features(
     instrumentation (`roster`: first system, variants, recurring instruments);
     a solo's own text may also name a missing instrument (a possible feature)."""
     headers = running_headers(pages)
-    systems = [s for page in pages for s in find_systems(page, headers)]
+    return features_in(
+        [s for page in pages for s in find_systems(page, headers)], roster
+    )
+
+
+def features_in(systems: list[System], roster: Roster) -> tuple[list[Feature], list[str]]:
+    """(features, warnings) from the document's systems, whether built from a
+    score's label column or from a part's staves."""
     drop_out_of_sequence(systems)
     count_bars(systems)
     candidates, warnings = collect_candidates(systems, roster)

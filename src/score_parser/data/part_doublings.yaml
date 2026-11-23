@@ -1,0 +1,17 @@
+# Doublings a part's player slot is known to cover: the instrument a slot's
+# player (the instrument folder a part sits in) may also play. A part whose
+# filename names one of these, in a folder for the key instrument, is reported
+# as a doubling ("player slot alto-sax-1 plays Clarinet"). Any other disagreement
+# between folder and filename is reported as unexplained and left as it is: only
+# show knowledge (the planner's person-to-part mapping, a future release) can
+# tell a misfiled part. Names are canonical instruments of aliases.yaml.
+doublings:
+  Flute: [Piccolo, Clarinet, Oboe]
+  Alto Sax: [Clarinet, Bass Clarinet, Flute, Piccolo, Oboe, Soprano Sax]
+  Tenor Sax: [Soprano Sax, Clarinet, Bass Clarinet, Flute, Piccolo, Oboe]
+  Baritone Sax: [Bass Clarinet, Clarinet, Flute]
+  Trumpet: [Flugelhorn, Piccolo Trumpet]
+  Trombone: [Tuba, Bass Trombone]
+  Percussion: [Sleigh Bells, Wood Block, Cowbell, Vibraphone]
+  Drums: [Percussion, Sleigh Bells, Wood Block, Cowbell]
+  Piano: [Organ, Synthesizer]
