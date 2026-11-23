@@ -381,6 +381,129 @@ def vocal_leads(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+HANDOVER_LABELS = [
+    "Alto Saxophone 1", "Trumpet in Bb 1-4", "Voice Lead F", "Voice Lead M", "Voice bck F", "Voice bck M", "Drums",
+]
+HANDOVER_BARS = (140, 210, 280, 350, 420, 490, 560)  # six bars, 70 pt each
+F, M, BCK_F, BCK_M = 2, 3, 4, 5  # staff indices in HANDOVER_LABELS
+
+
+def _sing(page, top: float, bar: int, staves: tuple[int, ...], words: int = 6) -> None:
+    """Lyric words ("la") under the given voice staves in bar `bar` (0-based) of a HANDOVER system."""
+    left, right = HANDOVER_BARS[bar], HANDOVER_BARS[bar + 1]
+    step = (right - left - 12) / words
+    for staff in staves:
+        for k in range(words):
+            page.insert_text((left + 6 + k * step, ys_at(top, staff) + 12), "la", fontname="helv", fontsize=7)
+
+
+def _handover_system(page, music_font: Path, first_bar: int, texts=(), left_edge: bool = True) -> None:
+    """A HANDOVER system with drawn barlines (not the left edge, when `left_edge` is false)."""
+    top = 150
+    _system(page, top, HANDOVER_LABELS, music_font, [(150, top - 30, str(first_bar), 7), *texts])
+    _barlines(page, top, len(HANDOVER_LABELS), HANDOVER_BARS if left_edge else HANDOVER_BARS[1:])
+
+
+def vocal_handover(music_font: Path, out: Path) -> None:
+    """The lead vocal changes with no wording, read from lyric words under the voice staves.
+    Page 1 (bars 1-6, mark B at bar 3): the female and both backing staves sing bars 1-2, the male
+    alone sings bars 3-4 (a handover to the male), the female alone sings bars 5-6 (back to the
+    female). Page 2 (bars 7-12): every voice staff sings every bar, and in bar 12 only the two leads
+    sing together, so no lead is invented. Page 3 (bars 13-18): the female sings, then the male alone
+    from bar 15, where a "Male Lead Verse 2" text is printed too (one feature). Page 4 (bars 19-24):
+    the male sings, the female alone sings bar 21 only (a one-bar fill, no handover), the male again."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Handover Tune", fontname="helv", fontsize=24)
+    _handover_system(p1, music_font, 1, [(270, 120, "B", 12)])
+    _sing(p1, 150, 0, (F, BCK_F, BCK_M))
+    _sing(p1, 150, 1, (F, BCK_F, BCK_M))
+    _sing(p1, 150, 2, (M,))
+    _sing(p1, 150, 3, (M,))
+    _sing(p1, 150, 4, (F,))
+    _sing(p1, 150, 5, (F,))
+    p2 = doc.new_page(width=612, height=792)
+    _handover_system(p2, music_font, 7)
+    for bar in range(5):
+        _sing(p2, 150, bar, (F, M, BCK_F, BCK_M))
+    _sing(p2, 150, 5, (F, M))
+    p3 = doc.new_page(width=612, height=792)
+    _handover_system(p3, music_font, 13, [(290, ys_at(150, M) - 10, "Male Lead Verse 2", 9)])
+    _sing(p3, 150, 0, (F,))
+    _sing(p3, 150, 1, (F,))
+    _sing(p3, 150, 2, (M,))
+    _sing(p3, 150, 3, (M,))
+    p4 = doc.new_page(width=612, height=792)
+    _handover_system(p4, music_font, 19)
+    for bar, staff in ((0, M), (1, M), (2, F), (3, M), (4, M)):
+        _sing(p4, 150, bar, (staff,))
+    doc.save(out)
+
+
+def vocal_lead_order(music_font: Path, out: Path) -> None:
+    """Leads in the order they sit along the bars, wording and handovers together.
+    Page 1: a "solo" over Voice Lead F in bar 5. Page 2 (bars 7-12): the male alone sings bars 7-8
+    (no wording), the F "solo" returns in bar 11. Page 3 (bars 40-45): "Female Lead" in bar 40, the
+    male alone from bar 42, the female alone from bar 44. Page 4 (bars 100-105): the female alone sings
+    bars 100-101 (the lead already). Page 5 (bars 106-111): "Male Lead" in bar 106 with the male
+    singing, the female alone from bar 109. Page 6 (bars 112-117): nobody sings. Page 7 (bars 200-205):
+    the female alone sings bars 200-201 (still the lead). Page 8 (bars 300-305, no barline drawn at the
+    left edge): the male alone sings the first two bars."""
+    doc = pymupdf.open()
+
+    def page(first_bar, texts=(), sing=(), left_edge=True, title=None):
+        pg = doc.new_page(width=612, height=792)
+        if title:
+            pg.insert_text((200, 60), title, fontname="helv", fontsize=24)
+        _handover_system(pg, music_font, first_bar, texts, left_edge)
+        for bar, staves in sing:
+            _sing(pg, 150, bar, staves)
+
+    page(1, [(430, ys_at(150, F) - 12, "solo", 9)], title="Synthetic Order Tune")
+    page(7, [(430, ys_at(150, F) - 12, "solo", 9)], [(0, (M,)), (1, (M,))])
+    page(40, [(160, ys_at(150, F) - 12, "Female Lead", 9)], [(2, (M,)), (3, (M,)), (4, (F,)), (5, (F,))])
+    page(100, sing=[(0, (F,)), (1, (F,))])
+    page(106, [(160, ys_at(150, M) - 10, "Male Lead", 9)], [(0, (M,)), (1, (M,)), (3, (F,)), (4, (F,))])
+    page(112)
+    page(200, sing=[(0, (F,)), (1, (F,))])
+    page(300, sing=[(0, (M,)), (1, (M,))], left_edge=False)
+    doc.save(out)
+
+
+def vocal_page_turn(music_font: Path, out: Path) -> None:
+    """A lead restated mid-row after a page turn is the same lead; another voice's lead in between
+    makes it a new one. Pages 1-2: a bare "solo" over Voice Lead F in bar 5, and again in bar 2 of
+    page 2 (one feature over two pages). Pages 3-4 (bars 60 on): a solo over F in bar 2, over M in
+    bar 5, and over F again in bar 2 of page 4 (three features). Pages 5-6: a bare "Solo" over an SATB
+    choir staff in bar 5, and again in bar 2 of page 6 (no voice, so two cues, not one). Pages 7-8: a
+    male lead with no section, then "Male Lead Verse 2". Pages 9-10: a solo over F, then one under a new mark."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Turn Tune", fontname="helv", fontsize=24)
+    _handover_system(p1, music_font, 1, [(430, ys_at(150, F) - 12, "solo", 9)])
+    p2 = doc.new_page(width=612, height=792)
+    _handover_system(p2, music_font, 7, [(220, ys_at(150, F) - 12, "solo", 9)])
+    p3 = doc.new_page(width=612, height=792)
+    _handover_system(p3, music_font, 60, [(220, ys_at(150, F) - 12, "solo", 9), (430, ys_at(150, M) - 12, "solo", 9)])
+    p4 = doc.new_page(width=612, height=792)
+    _handover_system(p4, music_font, 66, [(220, ys_at(150, F) - 12, "solo", 9)])
+    for number, first_bar, x in ((5, 100, 430), (6, 106, 220)):  # voiceless choir cues stay apart
+        page = doc.new_page(width=612, height=792)
+        labels = ["Alto Saxophone 1", "Drums", "SATB", "Piano"]
+        _system(page, 150, labels, music_font, [(150, 120, str(first_bar), 7), (x, ys_at(150, 2) - 12, "Solo", 9)])
+        _barlines(page, 150, len(labels), HANDOVER_BARS)
+    # An unsectioned male lead, then "Male Lead Verse 2" on the next page: two features; a lead
+    # restated under a new rehearsal mark (B printed before it on page 10): two features.
+    for first_bar, texts in (
+        (150, [(200, ys_at(150, M) - 12, "Male Lead", 9)]),
+        (156, [(220, ys_at(150, M) - 12, "Male Lead Verse 2", 9)]),
+        (200, [(170, 120, "A", 12), (200, ys_at(150, F) - 12, "solo", 9)]),
+        (206, [(170, 120, "B", 12), (220, ys_at(150, F) - 12, "solo", 9)]),
+    ):
+        _handover_system(doc.new_page(width=612, height=792), music_font, first_bar, texts)
+    doc.save(out)
+
+
 CUE_LABELS = ["Alto Saxophone 1", "Trumpet in Bb 1-4", "Drums", "SATB", "Piano"]
 
 
@@ -975,6 +1098,9 @@ def main() -> None:
         vocal_leads(font, OUT / "finale_vocal_leads.pdf")
         voice_staves(font, OUT / "finale_voice_staves.pdf")
         vocal_cues(font, OUT / "finale_vocal_cues.pdf")
+        vocal_handover(font, OUT / "finale_vocal_handover.pdf")
+        vocal_lead_order(font, OUT / "finale_vocal_lead_order.pdf")
+        vocal_page_turn(font, OUT / "finale_vocal_page_turn.pdf")
         distinct_solos(font, OUT / "finale_distinct_solos.pdf")
         shared_solos(font, OUT / "finale_shared_solos.pdf")
         absent_instrument_solo(font, OUT / "finale_absent_instrument_solo.pdf")
