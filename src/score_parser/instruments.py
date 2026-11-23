@@ -14,14 +14,17 @@ from .vocal import voice_lines
 
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
 _NUM = r"(?:\d+|i{1,3}|iv|v)"
-_CHAIRS = re.compile(rf"(?:\s+|(?<=\.))({_NUM}(?:\s*(?:-|–|&|,|and)\s*{_NUM})*)\s*$", re.I)
-_LEADING_CHAIRS = re.compile(rf"^({_NUM}(?:\s*(?:-|–|&|,)\s*{_NUM})*)\s+(?=[a-z])", re.I)  # "1&2 B Tpt."
+# A chair follows a space or a period, or runs on after a letter when it is a digit ("Flts1,2").
+_CHAIRS = re.compile(
+    rf"(?:\s+|(?<=\.)|(?<=[a-z])(?=\d))({_NUM}(?:\s*(?:-|–|&|,|/|and)\s*{_NUM})*)\s*$", re.I
+)
+_LEADING_CHAIRS = re.compile(rf"^({_NUM}(?:\s*(?:-|–|&|,|/)\s*{_NUM})*)\s+(?=[a-z])", re.I)  # "1&2 B Tpt."
 _CHAIR_PART = re.compile(rf"({_NUM})|(-|–)", re.I)
 _TRANSPOSITION = re.compile(r"\bin\s+[a-g][b#♭♯]?(?=\s|$)", re.I)
 _PARENS = re.compile(r"\(([^)]*)\)")
 _GLUED_CHAIR = re.compile(r"^(.*[A-Za-z]\.?)([Il|1-9])$")  # "TRUMPETI", "TENOR SAXI", "TRUMPET1": a chair glued to the name
 MAX_CHAIR = 9  # a bigger number beside a label is a bar number, not a chair
-_COMBINED = re.compile(r",\s*(?=[a-z])", re.I)  # "Trb. 3, Tba.": a comma before a name, not a chair
+_COMBINED = re.compile(r"[,/]\s*(?=[a-z])", re.I)  # "Trb. 3, Tba.", "Keyboard/Synth": a comma or slash before a name, not a chair
 
 
 @dataclass
@@ -58,6 +61,12 @@ def _data() -> list[dict]:
 @cache
 def _table() -> dict[str, tuple[str, str]]:
     return {alias: (i["name"], i["family"]) for i in _data() for alias in i["aliases"]}
+
+
+@cache
+def _combined() -> dict[str, str]:
+    """Alias of a label naming several instruments -> "Keyboard, Synthesizer"."""
+    return {a: ", ".join(names) for a, names in load("aliases.yaml").get("combined_aliases", {}).items()}
 
 
 @cache
@@ -114,6 +123,7 @@ def resolve(label: str) -> Resolved | None:
             if hit and hit[0] not in doublings:
                 doublings.append(hit[0])
     text = _TRANSPOSITION.sub("", _PARENS.sub(" ", label))
+    text = _combined().get(_normalise(text), text)
     parts = [_resolve_part(part) for part in _COMBINED.split(text)]
     if not parts[0] or None in parts:
         return None
