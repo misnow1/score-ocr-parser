@@ -1,4 +1,4 @@
-# 0004. Read a vocal lead handover from the lyric words under the lead staves
+# 0005. Read a vocal lead handover from the lyric words under the lead staves
 
 Status: accepted
 
