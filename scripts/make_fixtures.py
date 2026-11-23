@@ -665,7 +665,7 @@ def label_repair_overprint(music_font: Path, out: Path) -> None:
 
 def rehearsal_marks(music_font: Path, out: Path) -> None:
     """Mark A printed below a tempo line, mark C in one row with the words
-    "VERSE 2", and a page with no mark at all (the mark must not carry over)."""
+    "VERSE 2", and a page with no mark at all (C carries onto it)."""
     doc = pymupdf.open()
     p1 = doc.new_page(width=612, height=792)
     p1.insert_text((200, 60), "Synthetic Marks Tune", fontname="helv", fontsize=24)
@@ -740,13 +740,19 @@ def score_order(music_font: Path, out: Path) -> None:
 
 
 def unnumbered_order(music_font: Path, out: Path) -> None:
-    """No bar numbers anywhere: solos on one system keep page and x order."""
+    """No bar numbers anywhere: solos order by system, then x. The alto solo on
+    the first system has a reminder at a smaller x on the second, which also
+    holds a trumpet solo further left than the alto's first appearance."""
     doc = pymupdf.open()
     p1 = doc.new_page(width=612, height=792)
     p1.insert_text((200, 60), "Synthetic Unnumbered Tune", fontname="helv", fontsize=24)
     _system(p1, 150, FULL, music_font, [
         (400, ys_at(150, 0) - 12, "ALTO SOLO", 9),
         (250, ys_at(150, 3) - 12, "GUITAR SOLO", 9),
+    ])
+    _system(p1, 400, ABBR, music_font, [
+        (200, ys_at(400, 1) - 12, "TRUMPET SOLO", 9),
+        (160, ys_at(400, 0) - 12, "ALTO SOLO", 9),
     ])
     doc.save(out)
 

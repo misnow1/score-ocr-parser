@@ -81,11 +81,28 @@ def test_draft_puts_one_header_comment_per_section_and_a_todo_under_no_section(t
     lines = text.splitlines()
     headers = [ln for ln in lines if ln.startswith("  # Section ") or ln.startswith("  # (no section)")]
     assert headers == ["  # (no section)", "  # Section A", "  # Section B"]
-    assert lines[lines.index("  # (no section)") + 1].startswith("  # TODO(score-parser): no rehearsal mark")
-    assert text.count("# TODO(score-parser)") == 1  # only the no-section header; every step is confident
+    no_section = lines.index("  # (no section)")
+    assert "Trombone" in lines[no_section + 1]
+    assert lines[no_section + 2] == "    # TODO(score-parser): no rehearsal mark found: section unknown"
+    assert text.count("# TODO(score-parser)") == 1  # only the no-section step; every step is confident
     a = lines.index("  # Section A")
     assert "Alto Sax" in lines[a + 1] and "Guitar" in lines[a + 2]  # both A steps under one header
     assert lines[a + 3] == "  # Section B"
+
+
+def test_a_step_with_no_mark_has_a_todo_in_the_report_too():
+    report = parse_score(CARRY)
+
+    assert [(s.instrument, s.todo) for s in report.flow if s.todo] == [
+        ("trombone", "no rehearsal mark found: section unknown")
+    ]
+
+
+def test_a_no_mark_step_with_low_confidence_keeps_both_reasons():
+    report = parse_score(FIXTURES / "finale_chord_text_solos.pdf")
+
+    step = next(s for s in report.flow if s.todo and s.mark is None and "low confidence" in s.todo)
+    assert step.todo.endswith("; no rehearsal mark found: section unknown")
 
 
 def test_grouping_keeps_the_planner_step_shape(tmp_path):

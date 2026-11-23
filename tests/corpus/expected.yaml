@@ -24,10 +24,11 @@
 # `open: true` stands for a feature with no instrument (a generic marking over the staves, an open
 # solo); combine it with page, bar and mark. It replaces `instrument`.
 #
-# `section` is another name for `mark`: the rehearsal mark the flow draft groups by (marks carry
+# `section` is another name for `mark` (give both only with the same value): the rehearsal mark the flow draft groups by (marks carry
 # across page turns, ADR 0003). `order` lists single-instrument feature entries that must appear in
 # this order in the report (score order: page, bar, x), not necessarily adjacent, so a fact can say
-# "Tuba p8 follows Piano p1" without exact bars.
+# "Tuba p8 follows Piano p1" without exact bars. An entry names one instrument (a shared feature matches
+# by any of its instruments) and takes no `instruments`, `open`, `kind: shared` or `xfail`.
 #
 # `xfail: reason` marks a fact the tool does not meet yet. It must keep
 # failing; once it passes, the suite says to remove the xfail.

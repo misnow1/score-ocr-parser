@@ -93,11 +93,34 @@ def _feature_problem(report, want: dict) -> str | None:
     return None
 
 
+_ORDER_REJECTED = ("instruments", "open", "xfail")
+
+
+def shape_problems(facts: dict) -> list[str]:
+    """Facts that are malformed rather than unmet: an `order` entry must name
+    one instrument (it takes no `instruments`, `open`, `kind: shared` or
+    `xfail`: a chain of entries cannot be partly expected to fail), and a
+    fact giving both `mark` and `section` must give the same value."""
+    problems = []
+    for want in facts.get("features", []) + facts.get("not_features", []) + facts.get("order", []):
+        if "mark" in want and "section" in want and want["mark"] != want["section"]:
+            problems.append(f"fact {want}: mark and section are the same key and differ")
+    for want in facts.get("order", []):
+        if "instrument" not in want:
+            problems.append(f"order entry {want} needs an instrument")
+        for key in _ORDER_REJECTED:
+            if key in want:
+                problems.append(f"order entry {want} takes no {key!r}")
+        if want.get("kind") == "shared":
+            problems.append(f"order entry {want} takes no kind 'shared'")
+    return problems
+
+
 def _order_problem(report, entries: list[dict]) -> str | None:
     """Each entry must match a feature later in the report than the one before
-    (the first match after it; other features may sit between). Entries are
-    ordinary single-instrument feature facts: instrument, page, bar, mark or
-    section, chair, kind, voice."""
+    (the first match after it; other features may sit between). An entry names
+    one instrument, plus page, bar, mark or section, chair, kind, voice; a
+    feature shared by several instruments matches by any of them."""
     after = -1
     previous = None
     for want in entries:
@@ -144,7 +167,9 @@ def check_facts(report, facts: dict) -> list[str]:
     the report is in score order, so this asserts order without exact bars); max_features.
     Bars and pages match exactly.
     """
-    problems: list[str] = []
+    problems: list[str] = shape_problems(facts)
+    if problems:
+        return problems
     have = {e.instrument: e.chairs for e in report.instrumentation}
     for item in facts.get("instruments", []):
         fact = item if isinstance(item, dict) else {"name": item}
@@ -294,6 +319,38 @@ def test_order_entries_match_on_page_section_and_chair_like_features():
     assert check_facts(report, {"order": [{"instrument": "Guitar", "section": "A"}, {"instrument": "Alto Sax", "section": "A"}]})
 
 
+def test_malformed_order_entries_are_rejected_not_ignored():
+    report = parse_score(FIXTURES / "finale_score_order.pdf")
+
+    for entry in (
+        {"instrument": "Guitar", "xfail": "later"},
+        {"instruments": ["Guitar", "Alto Sax"]},
+        {"open": True},
+        {"instrument": "Guitar", "kind": "shared"},
+        {},
+    ):
+        assert check_facts(report, {"order": [entry]}), entry
+
+
+def test_a_shared_feature_matches_an_order_entry_by_any_of_its_instruments():
+    report = parse_score(FIXTURES / "finale_shared_solos.pdf")  # Soprano Sax, Clarinet, Trumpet share a solo at page 1
+
+    shared = next(f for f in report.features if f.shared_with)
+    lead = shared.instrument
+    other = shared.shared_with[0].instrument
+    assert check_facts(report, {"order": [{"instrument": other, "page": 1}]}) == []
+    assert check_facts(report, {"order": [{"instrument": lead, "page": 1}, {"instrument": "Alto Sax", "page": 1}]}) == []
+
+
+def test_mark_and_section_must_agree_when_both_are_given():
+    report = parse_score(FIXTURES / "finale_mark_carry.pdf")
+
+    assert check_facts(report, feature_fact(instrument="Guitar", mark="A", section="A")) == []
+    problems = check_facts(report, feature_fact(instrument="Guitar", mark="A", section="B"))
+    assert len(problems) == 1 and "same key" in problems[0]
+    assert check_facts(report, {"order": [{"instrument": "Guitar", "mark": "A", "section": "B"}]})
+
+
 def test_order_fact_reports_a_missing_feature():
     report = parse_score(FIXTURES / "finale_score_order.pdf")
 
@@ -316,8 +373,7 @@ def test_expected_facts_file_loads_and_each_entry_is_well_formed():
             assert "instrument" in want or "instruments" in want or want.get("open"), f"{stem}: {want}"
             if "xfail" in want:
                 assert want["xfail"], f"{stem}: xfail needs a reason"
-        for want in facts.get("order", []):
-            assert "instrument" in want, f"{stem}: an order entry names one instrument: {want}"
+        assert shape_problems(facts) == [], stem
 
 
 @needs_corpus

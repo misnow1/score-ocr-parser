@@ -195,12 +195,12 @@ class SystemContext(NamedTuple):
         return self.systems[self.index]
 
 
-def _mark_fields(systems: list[System], system: System, x: float) -> dict:
-    """The `mark` and `mark_from` fields of a candidate at x on `system`."""
+def _mark_in_force(systems: list[System], system: System, x: float) -> tuple[str | None, int | None]:
+    """(mark, page it is printed on if that is not the system's own page) at x on `system`."""
     reading = current_mark(systems, system, x)
     if reading is None:
-        return {"mark": None, "mark_from": None}
-    return {"mark": reading.text, "mark_from": reading.page if reading.page != system.page else None}
+        return None, None
+    return reading.text, reading.page if reading.page != system.page else None
 
 
 def _candidate(
@@ -276,6 +276,7 @@ def _candidate(
                 notes.append(check.problem)
     reading = system.bar_at(phrase.x0)
     reasons.append(reading.reason)
+    mark, mark_from = _mark_in_force(context.systems, system, phrase.x0)
     return Candidate(
         kind=kind,
         text=text,
@@ -289,7 +290,8 @@ def _candidate(
         x=phrase.x0,
         bar=reading.bar,
         bar_kind=reading.kind,
-        **_mark_fields(context.systems, system, phrase.x0),
+        mark=mark,
+        mark_from=mark_from,
         staff=staff_label,
         chair=chair,
         chair_from=chair_from,
@@ -319,6 +321,7 @@ def _vocal_candidate(
     """A vocal lead, with the evidence for its voice (which may be none)."""
     system = context.system
     reading = system.bar_at(phrase.x0)
+    mark, mark_from = _mark_in_force(context.systems, system, phrase.x0)
     reasons = ["matched vocal lead wording", why, reading.reason]
     return Candidate(
         kind="vocal lead",
@@ -333,7 +336,8 @@ def _vocal_candidate(
         x=phrase.x0,
         bar=reading.bar,
         bar_kind=reading.kind,
-        **_mark_fields(context.systems, system, phrase.x0),
+        mark=mark,
+        mark_from=mark_from,
         staff="",
         voice=voice,
         section=section,
@@ -686,15 +690,18 @@ def find_features(
 
 
 def in_score_order(built: list[tuple[Feature, list[list[Candidate]]]]) -> list[Feature]:
-    """Features by page, then bar, then x of the first location (ADR 0003). A
-    feature with no bar follows the barred ones on its page, by x. The sort is
-    stable, so ties keep reading order."""
+    """Features by page, then bar, then where the first copy sits: its system
+    in reading order, then x (ADR 0003). A feature with no bar follows the
+    barred ones on its page, so that fallback is page, system, x. The first
+    copy is the earliest one at the feature's first location; a later reminder
+    never moves a feature. The sort is stable, so ties keep reading order."""
 
-    def key(item: tuple[Feature, list[list[Candidate]]]) -> tuple[int, bool, int, float]:
+    def key(item: tuple[Feature, list[list[Candidate]]]) -> tuple[int, bool, int, int, float]:
         feature, sets = item
-        first_x = min(
-            c.x for group in sets for c in group if (c.page, c.bar) == (feature.page, feature.bar)
+        first = min(
+            (c for group in sets for c in group if (c.page, c.bar) == (feature.page, feature.bar)),
+            key=lambda c: (c.system_index, c.x),
         )
-        return feature.page, feature.bar is None, feature.bar or 0, first_x
+        return feature.page, feature.bar is None, feature.bar or 0, first.system_index, first.x
 
     return [feature for feature, _ in sorted(built, key=key)]

@@ -12,6 +12,7 @@ from .models import Feature, FlowStep
 
 LOW_CONFIDENCE = 0.8  # below this a step gets a TODO(score-parser) comment
 NO_SECTION = "(no section)"  # header over steps with no rehearsal mark
+NO_MARK_TODO = "no rehearsal mark found: section unknown"
 
 
 def _named(instrument: str, chair: int | None) -> str:
@@ -76,8 +77,15 @@ def _step(f: Feature) -> FlowStep:
     return FlowStep(section, who, note, todo, f.rehearsal_mark)
 
 
+def _flag_no_section(step: FlowStep) -> FlowStep:
+    """A step with no rehearsal mark gets a TODO (added to any other)."""
+    if step.mark is None:
+        step.todo = f"{step.todo}; {NO_MARK_TODO}" if step.todo else NO_MARK_TODO
+    return step
+
+
 def build_flow(features: list[Feature]) -> list[FlowStep]:
-    return [_step(f) for f in features]
+    return [_flag_no_section(_step(f)) for f in features]
 
 
 def render_yaml(flow: list[FlowStep], header: str = "") -> str:
@@ -87,8 +95,6 @@ def render_yaml(flow: list[FlowStep], header: str = "") -> str:
     for i, s in enumerate(flow):
         if i == 0 or s.mark != flow[i - 1].mark:  # a new run of steps under one mark
             lines.append(f"  # Section {s.mark}" if s.mark else f"  # {NO_SECTION}")
-            if not s.mark:
-                lines.append("  # TODO(score-parser): no rehearsal mark found for the steps below")
         q = json.dumps
         lines.append(
             f"  - {{ section: {q(s.section)}, instrument: {q(s.instrument)}, note: {q(s.note)} }}"
