@@ -14,7 +14,7 @@
 instruments:
   - name: Flute
     family: Woodwind
-    aliases: [flute, flutes, fl, flt]
+    aliases: [flute, flutes, fl, flt, flts]
   - name: Piccolo
     family: Woodwind
     aliases: [piccolo, picc]
@@ -32,13 +32,13 @@ instruments:
     aliases: [soprano saxophone, soprano sax, soprano sx, s sx, s sax, sop sax, sop sx]
   - name: Alto Sax
     family: Saxophone
-    aliases: [alto saxophone, alto sax, alto sx, a sx, a sax, alto]
+    aliases: [alto saxophone, alto sax, alto sx, a sx, a sax, alto, altosax, altosaxes]
   - name: Tenor Sax
     family: Saxophone
-    aliases: [tenor saxophone, tenor sax, tenor sx, ten sax, ten sx, t sx, t sax, tenor]
+    aliases: [tenor saxophone, tenor sax, tenor sx, ten sax, ten sx, t sx, t sax, tenor, tensax, tensaxes]
   - name: Baritone Sax
     family: Saxophone
-    aliases: [baritone saxophone, baritone sax, bari sax, bari sx, bar sx, bar sax, b sx, bari]
+    aliases: [baritone saxophone, baritone sax, bari sax, bari sx, bar sx, bar sax, b sx, bari, barisax]
   - name: Trumpet
     family: Trumpet
     aliases: [trumpet, trumpets, trpt, tpt, tpts, trp, b tpt, bb tpt, b trpt, bb trpt, b trumpet, bb trumpet]
@@ -61,12 +61,16 @@ instruments:
   - name: Piano
     family: Rhythm
     aliases: [piano, pno, pf]
+  - name: Keyboard
+    family: Rhythm
+    aliases: [keyboard, keyboards, keys]
   - name: Organ
     family: Rhythm
     aliases: [organ, org, rock organ, electric organ, e org]
   - name: Guitar
     family: Rhythm
-    aliases: [guitar, guitars, gtr, gtrs, electric guitar, e gtr, acoustic guitar, ac gtr, a gtr, lead guitar, ld gtr]
+    aliases: [guitar, guitars, gtr, gtrs, electric guitar, e gtr, acoustic guitar, ac gtr, a gtr, lead guitar, ld gtr,
+      acoustguitar, acoust guitar, acoust gtr, elecguitar, elec guitar, elec gtr]
     shared_aliases: [guitars, gtrs]  # one staff for every chair of the instrument
   - name: Bass
     family: Rhythm
@@ -74,7 +78,7 @@ instruments:
   - name: Cello-Bass
     family: Strings
     review: one staff for Cello and Double Bass; the score cannot say which instrument plays it
-    aliases: [cello-bass, cello bass]
+    aliases: [cello-bass, cello bass, cello:bass]
   - name: Vibraphone
     family: Rhythm
     aliases: [vibraphone, vibes, vib]
@@ -84,6 +88,10 @@ instruments:
   - name: Drums
     family: Rhythm
     aliases: [drums, drum set, drumset, drum kit, d s, dr, dm]
+  - name: Rhythm
+    family: Rhythm
+    review: a rhythm part; the score does not say which instruments play it (percussion, toys, maybe the drum kit)
+    aliases: [rhythm, rhythmn]
   - name: Percussion
     family: Rhythm
     aliases: [percussion, perc]
@@ -114,3 +122,11 @@ instruments:
   - name: Cowbell
     family: Rhythm
     aliases: [cowbell, cow bell, cowbells, c bl, c bls, c bell]
+
+# One label that names several instruments, written run together or spaced
+# ("KeyboardSynth"); each is split into its parts like "Keyboard, Synthesizer".
+combined_aliases:
+  keyboardsynth: [Keyboard, Synthesizer]
+  keyboard synth: [Keyboard, Synthesizer]
+  keyboardorgan: [Keyboard, Organ]
+  keyboard organ: [Keyboard, Organ]
