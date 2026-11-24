@@ -133,11 +133,11 @@ def test_a_title_inside_a_longer_one_or_with_another_number_is_another_song(tmp_
 def test_the_title_matches_whatever_the_case_the_article_or_a_typo(tmp_path):
     report = parts_of(tmp_path, "The Jingle Bells", [
         "trumpet-1/JINGLE BELLS Trpt1.pdf",
-        "trumpet-2/Jingle Bels Trpt2.pdf",  # a typo
+        "trumpet-2/Jinglle Bells Trpt2.pdf",  # a typo in a long word
         "trumpet-3/Jingle Bell Rock Trpt3.pdf",  # another song
     ])
 
-    assert [p.file for p in report.parts.parts] == ["trumpet-1/JINGLE BELLS Trpt1.pdf", "trumpet-2/Jingle Bels Trpt2.pdf"]
+    assert [p.file for p in report.parts.parts] == ["trumpet-1/JINGLE BELLS Trpt1.pdf", "trumpet-2/Jinglle Bells Trpt2.pdf"]
 
 
 def test_parse_cli_reports_parts_per_song_and_files_that_match_no_song(tmp_path, capsys):
@@ -297,6 +297,24 @@ def matched_names(tmp_path, title, files):
         ("Medley VII", "Medley VIII.pdf"),
         ("Medley 5", "Medley 6.pdf"),
         ("Medley (Part 1)", "Medley (Part 2).pdf"),  # a bracketed number belongs to the title
+        ("Medley (Part 1)", "Medley (Part 2) Trpt1.pdf"),  # ... also before a part word
+        ("Short Tune", "Short Tune (Reprise) Trpt1.pdf"),
+        ("Short Tune (Reprise)", "Short Tune Trpt1.pdf"),
+        ("Medley", "Medley I.pdf"),  # a roman numeral, a single letter, a short word: not noise cut short
+        ("Medley", "Medley V.pdf"),
+        ("Medley", "Medley B.pdf"),
+        ("Come", "Come In.pdf"),
+        ("Short Tune", "Short Tune Ex.pdf"),
+        ("Silent Night", "Silent Knight.pdf"),  # short words must be exact
+        ("Hold Here", "Hold Her.pdf"),
+        ("Silent Night", "Silent Night Light.pdf"),  # label words only in their phrases
+        ("Morning Light", "Morning.pdf"),
+        ("Jingle", "Jingle Bell.pdf"),
+        ("Fly", "Fly As Lead.pdf"),
+        ("Bell", "Bell Tone Light.pdf"),
+        ("Short Tune", "Short Tune Lead.pdf"),
+        ("Short Tune", "Short Tune Only Lyrics.pdf"),  # a phrase in another order
+        ("Short Tune", "Short Tune Hi.pdf"),
         ("Symphony 5 7", "Symphony 9 3.pdf"),  # not dates
         ("Short Tune", "Short Tune Short Tune Trpt1.pdf"),  # more title after the title
         ("Short Tune", "Short Tune Other Song Trpt1.pdf"),  # another song after the part words
@@ -323,7 +341,14 @@ def test_a_title_that_differs_in_a_word_a_number_or_by_more_words_is_another_son
         ("Short Tune", "Short Tune Piccolo Flute.pdf"),  # two different instruments
         ("Short Tune", "Short Tune lyrics.pdf"),
         ("Short Tune", "Short Tune Lyrics Only.pdf"),
-        ("Short Tune", "Short Tune Backgrund.pdf"),  # a long label word with a typo
+        ("Short Tune", "Short Tune Backgrund Singers.pdf"),  # a long label word with a typo
+        ("Short Tune (Reprise)", "Short Tune (Reprise) Trpt1.pdf"),
+        ("Medley (Part 2)", "Medley (Part 2) Trpt1.pdf"),
+        ("Short Tune", "Short Tune Synthesizer Airy Pad Tone.pdf"),  # a patch name after a synthesizer
+        ("Short Tune", "Short Tune Jn.pdf"),  # initials
+        ("Short Tune Not", "Short Tune.pdf"),  # a score's status word
+        ("He Is Born", "Trumpet 1 He Is Born.pdf"),
+        ("Short Tune", "Trumpet 1 Short Tune.pdf"),
     ],
 )
 def test_dates_brackets_and_the_parts_own_labelling_stay_out_of_the_comparison(tmp_path, title, file):

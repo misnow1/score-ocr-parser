@@ -4,17 +4,24 @@ aliases:
   first-noel: [First Nowell]
   do-you-hear: [Do You Hear What I Hear]
   please-come-home: [Please Come Home For Christmas]
+  the-most-wonderful-time-of-the-year: [The Most Wonderful Time of the Yea]  # a score file name cut short
   superstition: [Super Christmas, Merry Super Christmas]  # parodies of the same song
 
-# Words a part file name may carry after (or around) a song's title and that
-# name no instrument: they describe the file. A word after the title that is
-# neither one of these, an instrument nor a number follows another song's title.
-# A long word here also matches its close misspellings. Also here: a status
-# word or an editor's initials some files carry, and the words of a synthesizer
-# patch name that follows its part.
-part_descriptions: [lyrics, only, sheet, lead, vocal, background, backing, singers, with, as, and, solo, copy, first, satb, not, jn, airy, bell, tone, light, attack, ethereal]
+# Phrases a part file name may carry after (or around) a song's title and that
+# name no instrument: they describe the file. Each is matched as written, word
+# for word (a long word may carry a typo); any other word after the title, or
+# these words in another order, follows another song's title.
+part_descriptions: [lyrics only, lyrics, lead sheet, background singers, background, solo, as solo, satb, first, copy]
+
+# Instruments whose part file name may be followed by free text (a synthesizer
+# patch name, a note on a vocal part). Whatever follows one of them is labelling.
+free_text_after: [Synthesizer, Lead Vocal]
+
+# Words a score's file name may end with that are no part of the title ("not
+# final"): dropped from the end of a score's title only.
+score_status_words: [not]
 
 # Words dropped from a title, a score's or a part file's, before titles are
 # compared: noise a filename carries. A title that needs one of these words to
 # tell it from another song cannot be told apart by this tool.
-title_noise: [extended, version, revised, expanded, instr, instrumentation, bkup, eprint, nov, dragged]
+title_noise: [extended, version, revised, expanded, instrumentation, bkup, eprint, nov, dragged]
