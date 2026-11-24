@@ -16,10 +16,8 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "tests" / "corpus"))
-
-from part_lookup import parts_of_score  # noqa: E402
-from score_parser import parse_score  # noqa: E402
+from score_parser import find_parts, parse_score
+from score_parser.title import clean_filename
 
 COLUMNS = ("instruments", "features", "no_bar", "no_instrument", "no_mark", "carried", "warnings")
 PART_COLUMNS = ("parts", "part_solos")
@@ -40,7 +38,7 @@ def counts(report) -> tuple[int, ...]:
 
 def part_counts(parts_dir: Path, pdf: Path) -> tuple[int, int]:
     """(parts found for the score, solos read in them); the parts are read in place."""
-    reports = parts_of_score(parts_dir, pdf.stem)
+    reports = find_parts(parts_dir, clean_filename(pdf.stem)).parts
     return len(reports), sum(len(r.features) for r in reports)
 
 

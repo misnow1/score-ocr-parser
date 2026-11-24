@@ -31,22 +31,31 @@ def _print_summary(rows: list[SummaryRow]) -> None:
         print(f"{r.score:<{width}}  {r.instruments:>11}  {r.features:>8}  {r.warnings:>8}")
 
 
-def _print_parts_summary(reports: list[tuple[str, ScoreReport]]) -> None:
-    """Per-score parts found, and the files of the tree that match none of the scores."""
-    rows = [
-        (name, *(len(x) for x in (r.parts.parts, r.parts.doublings, r.parts.unexplained, r.parts.unreadable)))
-        for name, r in reports
-        if r.parts
-    ]
-    if not rows:
+def _print_parts_summary(reports: list[tuple[str, ScoreReport]], failed: int) -> None:
+    """Per-score parts found, the files two songs both match (the risk of a
+    title match), and the files that match no song. When a score failed its
+    parts are unknown, so the files matching no song cannot be told."""
+    found = [(name, r.parts) for name, r in reports if r.parts is not None]
+    if not found:
         return
+    rows = [(name, *(len(x) for x in (p.parts, p.doublings, p.unexplained, p.unreadable))) for name, p in found]
     header = ("score", "parts", "doublings", "unexplained", "unreadable")
     width = max(len(row[0]) for row in [header, *rows])
     print()
     for row in [header, *rows]:
         print(f"{row[0]:<{width}}  {row[1]:>5}  {row[2]:>9}  {row[3]:>11}  {row[4]:>10}")
-    matched = {p.file for _, r in reports if r.parts for p in r.parts.parts}
-    unmatched = sorted({f for _, r in reports if r.parts for f in r.parts.other_files} - matched)
+    songs_of: dict[str, list[str]] = {}
+    for name, p in found:
+        for part in p.parts:
+            songs_of.setdefault(part.file, []).append(name)
+    twice = {file: names for file, names in songs_of.items() if len(names) > 1}
+    print(f"files matching more than one song: {len(twice)}")
+    for file, names in sorted(twice.items()):
+        print(f"  {file}: {', '.join(names)}")
+    if failed:
+        print(f"files matching no song: not counted, {failed} of the scores failed")
+        return
+    unmatched = sorted({f for _, p in found for f in p.other_files} - songs_of.keys())
     print(f"files matching no song: {len(unmatched)}")
     for name in unmatched:
         print(f"  {name}")
@@ -104,6 +113,9 @@ def _parse(args: argparse.Namespace) -> int:
         if planner_dir and (out.resolve() == planner_dir.resolve() or planner_dir.resolve() in out.resolve().parents):
             print(f"refusing to write into the planner {what} directory", file=sys.stderr)
             return 2
+    if parts_dir and not parts_dir.is_dir():
+        print(f"--parts-dir {parts_dir} is not a directory", file=sys.stderr)
+        return 2
     out.mkdir(parents=True, exist_ok=True)
     pdfs = _collect_pdfs(args.paths)
     rows: list[SummaryRow] = []
@@ -129,7 +141,7 @@ def _parse(args: argparse.Namespace) -> int:
         for w in report.warnings:
             print(f"  warning ({pdf.name}): {w}", file=sys.stderr)
     _print_summary(rows)
-    _print_parts_summary(reports)
+    _print_parts_summary(reports, failed)
     if failed:
         print(f"{failed} of {len(pdfs)} scores failed", file=sys.stderr)
         return 1
