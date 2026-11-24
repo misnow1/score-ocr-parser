@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from part_lookup import find_parts, parts_of_score
-from score_parser import parse_part, parse_score
+from score_parser import find_parts, parse_part, parse_score
+from score_parser.title import clean_filename
 
 EXPECTED = Path(__file__).with_name("expected.yaml")
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "synthetic"
@@ -654,31 +654,15 @@ def test_a_stale_solo_xfail_inside_an_expected_to_fail_part_is_still_reported(tr
     assert len(problems) == 1 and "solo at page 1, mark A now passes" in problems[0]
 
 
-def test_find_parts_matches_the_song_title_across_every_instrument_folder(tmp_path):
-    wanted = [
-        place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1"),
-        place_part(tmp_path, "alto-sax-1", "Synthetic Tune Clarinet"),  # a doubling: another folder
-        place_part(tmp_path, "tenor-sax-1", "SYNTHETIC TUNE (copy) Soprano Sax"),  # case and noise do not matter
-    ]
-    place_part(tmp_path, "trumpet-2", "Another Number Trpt2")  # another song
-    place_part(tmp_path, "scores", "Synthetic Tune SCORE")  # a conductor score is not a part
-    (tmp_path / "MANIFEST.csv").write_text("not a folder\n")
-
-    assert find_parts(tmp_path, "Synthetic Tune") == sorted(wanted)
-
-
-def test_find_parts_ignores_a_score_title_that_only_shares_a_word(tmp_path):
-    place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1")
-    place_part(tmp_path, "trumpet-2", "Plain Song 10:15 Trpt2")
-
-    assert find_parts(tmp_path, "Tune") == []
-    place_part(tmp_path, "trumpet-3", "Long Short Tune Medley Trpt3")
-    assert find_parts(tmp_path, "Short Tune 11.3.26") == []  # words are shared, the song is not
-    assert find_parts(tmp_path / "missing", "Synthetic Tune") == []
+def parts_of_score(parts_root: Path, score_stem: str) -> list:
+    """The parts of the score with this file name (without .pdf), read in place by the library lookup."""
+    return find_parts(parts_root, clean_filename(score_stem)).parts
 
 
 def test_parts_of_a_score_are_found_by_the_cleaned_score_file_name(tmp_path):
     place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1")
+    place_part(tmp_path, "scores", "Synthetic Tune - Score")  # a conductor score is not a part
+    place_part(tmp_path, "trumpet-2", "Another Number Trpt2")  # another song
     parts = parts_of_score(tmp_path, "Synthetic Tune 11.3.26 - Score ")
     assert [(r.part.player_slot, r.part.instrument) for r in parts] == [("trumpet-1", "Trumpet")]
 
