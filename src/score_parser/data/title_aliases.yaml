@@ -3,16 +3,18 @@
 aliases:
   first-noel: [First Nowell]
   do-you-hear: [Do You Hear What I Hear]
-  please-come-home: [Please Come Home For Christmas, Please Come Home For Chrstmas]
+  please-come-home: [Please Come Home For Christmas]
   superstition: [Super Christmas, Merry Super Christmas]  # parodies of the same song
 
-# Words that may follow a song's title in a part file name and name no
-# instrument: a description of the file. Matched at the start of what follows
-# the title (an instrument name after the title needs no entry here).
-part_descriptions: [lyrics only, lead sheet, lead vocal, background, backgroud, backing, solo, copy, first, e]
+# Words a part file name may carry after (or around) a song's title and that
+# name no instrument: they describe the file. A word after the title that is
+# neither one of these, an instrument nor a number follows another song's title.
+# A long word here also matches its close misspellings. Also here: a status
+# word or an editor's initials some files carry, and the words of a synthesizer
+# patch name that follows its part.
+part_descriptions: [lyrics, only, sheet, lead, vocal, background, backing, singers, with, as, and, solo, copy, first, satb, not, jn, airy, bell, tone, light, attack, ethereal]
 
 # Words dropped from a title, a score's or a part file's, before titles are
-# compared: noise a filename carries ("extended version", "revised", "expanded
-# instrumentation", a "bkup" or "eprint" tag). A title that needs one of these
-# words to tell it from another song cannot be told apart by this tool.
-title_noise: [extended, version, revised, expanded, instr, instrumentation, bkup, eprint, nov]
+# compared: noise a filename carries. A title that needs one of these words to
+# tell it from another song cannot be told apart by this tool.
+title_noise: [extended, version, revised, expanded, instr, instrumentation, bkup, eprint, nov, dragged]

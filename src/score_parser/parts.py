@@ -9,7 +9,7 @@ are read with part mode, in place. Nothing is written.
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .matching import same_song
+from .songmatch import same_song
 from .models import ParseOptions, PartReport, PartsReport
 from .part import parse_part, read_part_info
 
