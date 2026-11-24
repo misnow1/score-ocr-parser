@@ -34,6 +34,16 @@ class Phrase:
 
 
 @dataclass
+class StartNote:
+    """How a part's staff-start number was read when it was one of an overprinted
+    pair: `text` goes into every bar reading on the staff; `confirmed` is whether
+    counting the bars of the staff before reached it."""
+
+    text: str
+    confirmed: bool
+
+
+@dataclass
 class System:
     page: int
     index: int
@@ -47,6 +57,7 @@ class System:
     barlines: list[float] = field(default_factory=list)  # drawn barlines; text-layer pages only
     rule_y: float = 0.0  # a staff the barlines cross
     joins_previous: bool = False  # on the same row of bars as the system before
+    start_note: StartNote | None = None  # parts: the staff-start number was one of an overprinted pair
     count: BarCount | None = None  # set by measures.count_bars
     row: int = 0  # which row of bars this stack is on, in reading order (set with `count`)
 
@@ -57,12 +68,21 @@ class System:
         """Whether x is in the first bar of its row (true when bars are not counted)."""
         return self.count is None or self.count.in_first_bar(x)
 
+    def _noted(self, reading: BarReading) -> BarReading:
+        """A counted bar on a staff whose first number was overprinted says so,
+        and is only a guess when counting did not confirm the number."""
+        note = self.start_note
+        if note is None:
+            return reading
+        kind = reading.kind if note.confirmed else "overprinted"
+        return BarReading(reading.bar, kind, f"{reading.reason}; {note.text}")
+
     def bar_at(self, x: float) -> BarReading:
         """The bar at x: counted by barlines when possible, else the nearest
         printed number (on an OCR page, flagged as less certain)."""
         counted = self.count.bar_at(x) if self.count else None
         if counted:
-            return counted
+            return self._noted(counted)
         reading = bar_at(self.bars, x)
         if self.source == "ocr" and reading.bar is not None:
             note = "OCR page: barlines cannot be counted, so the bar may be earlier than the true one"

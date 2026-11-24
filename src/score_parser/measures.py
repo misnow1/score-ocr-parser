@@ -40,8 +40,10 @@ class HasBars(Protocol):
 
 # How a bar was found: counted from a printed number by barlines, continued from
 # the previous system, read as the nearest printed number (text sits left of
-# every number: "assumed"), the same on an OCR page, or not found.
-BarKind = Literal["counted", "continued", "nearest", "assumed", "ocr", "missing"]
+# every number: "assumed"), the same on an OCR page, counted from a part's
+# staff-start number that was one of an overprinted pair the rests did not
+# confirm, or not found.
+BarKind = Literal["counted", "continued", "nearest", "assumed", "ocr", "overprinted", "missing"]
 
 
 class BarReading(NamedTuple):

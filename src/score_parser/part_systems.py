@@ -12,17 +12,20 @@ from dataclasses import dataclass
 from .layout import lines
 from .measures import BAR_ROW_REACH, merge_barlines, page_number_zone, share_barlines
 from .models import Page, Token
+from .part_labels import START_REACH, StartLabel, bars_in, read_start_labels
 from .staves import Staff
-from .systems import System, place_rows
+from .systems import StartNote, System, place_rows
 
 STAFF_LINE_GAP = 12.0  # staff lines are closer than this; the next staff is further
 MIN_STAFF_LINES = 3  # a run of fewer long rules is a rule under a title, not a staff
 BARLINE_END_TOLERANCE = 2.0  # a barline runs from the top staff line to the bottom one
 ONE_LINE_HALF = 10.0  # a one-line staff is taken as this far above and below its line
 MIN_ONE_LINE_BARLINES = 2  # a lone rule with fewer barlines through it is no staff
-START_REACH = 30.0  # a bar number this near the staff's left end numbers its first bar
 TIME_SIGNATURE_REACH = 80.0  # staff-sized digits this near the staff's left end are the meter
-REST_NUMERAL_HEIGHT = 1.5  # a digit this many staff heights tall is a multi-bar rest's count
+REST_NUMERAL_HEIGHT = 1.5  # a digit this many staff heights tall is a multi-bar rest's count on the staff
+REST_ABOVE_HEIGHT = 0.95  # ...and this many when it sits just above the staff, as most parts print it
+REST_ABOVE_REACH = 6.0  # a digit that ends this far above the top line (or less) sits on the staff
+REST_CROSS = 2.0  # ...and one may cross the top line by this much (some fonts do)
 
 
 @dataclass
@@ -82,18 +85,30 @@ def part_staves(page: Page, one_line: bool = False) -> list[PartStaff]:
 
 
 def _rest_numerals(page: Page, staves: list[PartStaff]) -> list[tuple[Token, int]]:
-    """(token, staff index) of each staff-sized digit sitting on a staff: the
-    count of a multi-bar rest, whether set in a music font (a glyph) or not.
-    Text-sized digits (tuplets, bar numbers) are not, and neither is a digit
-    near the staff's left end, where the time signature sits."""
+    """(token, staff index) of each staff-sized digit sitting on a staff or just
+    above its top line: the count of a multi-bar rest, whether set in a music
+    font (a glyph) or not. Text-sized digits (tuplets, bar numbers) are not, and
+    neither is a digit near the staff's left end, where the time signature sits."""
     found = []
     for tok in [*page.tokens, *page.glyphs]:
         if not (tok.text.isdigit() and len(tok.text) <= 2):
             continue
         index = max(range(len(staves)), key=lambda i: staves[i].overlap(tok))
         staff = staves[index]
-        near_start = (tok.x0 + tok.x1) / 2 < staff.left + TIME_SIGNATURE_REACH
-        if staff.overlap(tok) > 0 and not near_start and tok.y1 - tok.y0 >= REST_NUMERAL_HEIGHT * staff.height:
+        centre = (tok.x0 + tok.x1) / 2
+        height = tok.y1 - tok.y0
+        # A time signature sits on the staff, never above it; a bar number sits above it.
+        on_staff = (
+            staff.overlap(tok) > 0
+            and height >= REST_NUMERAL_HEIGHT * staff.height
+            and centre >= staff.left + TIME_SIGNATURE_REACH
+        )
+        above_staff = (
+            -REST_CROSS <= staff.top - tok.y1 <= REST_ABOVE_REACH
+            and height >= REST_ABOVE_HEIGHT * staff.height
+            and centre >= staff.left + START_REACH
+        )
+        if on_staff or above_staff:
             found.append((tok, index))
     return found
 
@@ -118,9 +133,30 @@ def find_part_systems(page: Page, label: str, one_line: bool = False) -> list[Sy
     for tok, i in rests:
         systems[i].rests.append(((tok.x0 + tok.x1) / 2, int(tok.text)))
     skip = {id(tok) for tok, _ in rests}
+    lengths = [bars_in(system.barlines, system.rests) for system in systems]
+    joined = [system.joins_previous for system in systems]
+    starts, placed, read = read_start_labels(staves, [t for t in page.tokens if id(t) not in skip], lengths, joined)
+    skip |= {id(tok) for tok in read}
     furniture = staves[0].centre - BAR_ROW_REACH
     rows = [row for ln in lines(page.tokens) if (row := [t for t in ln if id(t) not in skip]) and row[0].yc >= furniture]
     place_rows(systems, rows, page_number_zone(page, 0.0))
     for system, staff in zip(systems, staves):
         system.bars = [bar for bar in system.bars if bar[0] <= staff.left + START_REACH]
+    for i, (system, start) in enumerate(zip(systems, starts)):
+        system.bars = sorted([*system.bars, *((t.x0, int(t.text), t.x1) for t in placed[i])])
+        if start and start.pair:
+            system.start_note = _overprint_note(start)
     return systems
+
+
+def _overprint_note(label: StartLabel) -> StartNote:
+    """What to say of a staff-start number that was one of an overprinted pair,
+    and whether counting the staff before from the lower number reached it."""
+    low, high = label.pair or (0, label.number)
+    said = f"staff-start label overprinted: {low} and {high} read as two numbers, {high} for this staff"
+    if label.confirmed:
+        return StartNote(f"{said}; counting the staff before from {low} (multi-bar rests included) reaches {high}", True)
+    return StartNote(
+        f"{said}; not confirmed by counting the staff before from {low} (multi-bar rests included), so the bar may be off",
+        False,
+    )
