@@ -41,6 +41,7 @@ class System:
     bars: list[tuple[float, int, float]] = field(default_factory=list)
     marks: list[tuple[float, str]] = field(default_factory=list)
     texts: list[Phrase] = field(default_factory=list)
+    rests: list[tuple[float, int]] = field(default_factory=list)  # multi-bar rests as (x, bars); parts only
     tokens: list[Token] = field(default_factory=list)  # every word placed on the system, lyrics included
     source: Source = "text"
     barlines: list[float] = field(default_factory=list)  # drawn barlines; text-layer pages only
@@ -94,12 +95,18 @@ def find_systems(page: Page, headers: frozenset[str] = frozenset()) -> list[Syst
     for above, below in zip(systems, systems[1:]):
         below.joins_previous = share_barlines(page.barlines, above.rule_y, below.rule_y)
     label_right = max(t.x1 for t in label_tokens(stacks))
-    is_page_number = page_number_zone(page, label_right)
-    for row in other_rows:
+    place_rows(systems, other_rows, page_number_zone(page, label_right))
+    return systems
+
+
+def place_rows(
+    systems: list[System], rows: list[list[Token]], is_page_number: Callable[[str, float], bool]
+) -> None:
+    """Hand each line of text to the system it belongs to."""
+    for row in rows:
         owner = owning_system(systems, row[0].yc)
         under = _numbered_under(systems, owner, row)
         _place(under or owner, row, is_page_number, below=under is not None)
-    return systems
 
 
 def _numbered_under(systems: list[System], owner: System, row: list[Token]) -> System | None:

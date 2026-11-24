@@ -1,0 +1,33 @@
+# How a part's player slot (the instrument folder it sits in) relates to the
+# instrument its filename names, when the two differ (ADR 0004). Names are
+# canonical instruments of aliases.yaml.
+#
+# Same canonical instrument, or an instrument variant (Bass and Electric Bass,
+# instrument_variants.yaml): the slot and the part agree.
+#
+# `families` lists instruments a player of one commonly also plays; a part in
+# its slot's family is a doubling. `pairs` lists further known doublings,
+# slot instrument -> instruments (a trombone player also plays tuba).
+#
+# Any other disagreement (a violin part in a trombone folder) is reported as an
+# unexplained disagreement and left as filed. Only show knowledge (the
+# planner's person-to-part mapping, a future release) can tell a misfile.
+families:
+  - [Keyboard, Piano, Organ, Synthesizer]
+  - [Flute, Piccolo, Oboe, Clarinet, Bass Clarinet, Soprano Sax, Alto Sax, Tenor Sax, Baritone Sax]
+  - [Trumpet, Piccolo Trumpet, Flugelhorn]
+  - [Trombone, Bass Trombone]
+  - [Violin, Viola, Cello, Cello-Bass]
+  - [Drums, Percussion, Rhythm, Sleigh Bells, Wood Block, Cowbell, Vibraphone]
+pairs:
+  Trombone: [Tuba]
+  Bass Trombone: [Tuba]
+  Lead Vocal: [Piano]  # the vocal score's accompaniment
+
+# A generic part that fits any slot of its own alias-table family (a Rhythm part
+# in a bass, guitar or piano folder).
+generic_parts: [Rhythm]
+
+# Instruments whose parts may draw one-line staves (percussion); for any other
+# part a lone long rule is not a staff.
+one_line_staves: [Drums, Percussion, Rhythm, Sleigh Bells, Wood Block, Cowbell]

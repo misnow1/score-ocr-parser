@@ -84,7 +84,7 @@ instruments:
     aliases: [vibraphone, vibes, vib]
   - name: Electric Bass
     family: Rhythm
-    aliases: [electric bass, bass guitar, e bass, e b, eb]
+    aliases: [electric bass, bass guitar, bass gtr, e bass, e b, eb]
   - name: Drums
     family: Rhythm
     aliases: [drums, drum set, drumset, drum kit, d s, dr, dm]

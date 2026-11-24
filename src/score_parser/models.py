@@ -49,6 +49,10 @@ class Page:
     rotation: int = 0
     # Vertical rules drawn on a text-layer page as (x, y0, y1); empty on OCR pages.
     barlines: list[tuple[float, float, float]] = field(default_factory=list)
+    # Long horizontal rules (staff lines) as (y, x0, x1) and short vertical ones
+    # (barlines, stems) as (x, y0, y1); text-layer pages only. Used by part mode.
+    staff_lines: list[tuple[float, float, float]] = field(default_factory=list)
+    short_rules: list[tuple[float, float, float]] = field(default_factory=list)
     # Music-font glyphs the clean stage took out of `tokens` (clefs, notes).
     glyphs: list[Token] = field(default_factory=list)
 
@@ -140,6 +144,43 @@ class ScoreReport:
     features: list[Feature] = field(default_factory=list)
     flow: list[FlowStep] = field(default_factory=list)
     unknown_labels: list[str] = field(default_factory=list)
+    pages: list[PageInfo] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+# How a part's player slot (its instrument folder) relates to the instrument its
+# filename names: the same, a doubling (the slot's player also plays it), an
+# unexplained disagreement (left as it is, never corrected), or unknown (the
+# folder names no instrument, or the part has none).
+SlotRelation = Literal["same", "doubling", "unexplained", "unknown"]
+InstrumentFrom = Literal["filename", "folder"]
+
+
+@dataclass
+class PartInfo:
+    """Who a part is for. `instrument` and `chairs` come from the filename's
+    trailing part word (else the folder); `player_slot` is the folder name."""
+
+    instrument: str | None
+    chairs: list[int]
+    instrument_from: InstrumentFrom | None
+    player_slot: str
+    slot_instrument: str | None = None  # what the folder name resolves to
+    relation: SlotRelation = "unknown"
+    note: str = ""  # "player slot alto-sax-1 (Alto Sax) plays Clarinet" for a doubling
+    also: list[str] = field(default_factory=list)  # further instruments of a combined name ("KeyboardSynth")
+
+
+@dataclass
+class PartReport:
+    """The report of one part file: its instrument and chairs, and its solos."""
+
+    title: str
+    part: PartInfo
+    features: list[Feature] = field(default_factory=list)
     pages: list[PageInfo] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
