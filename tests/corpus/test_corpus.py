@@ -1,23 +1,30 @@
 """Opt-in corpus tests against the real local score folder.
 
-Skipped unless SCORE_CORPUS_DIR points at a folder of score PDFs. Never run in
-CI. The scores are read in place; nothing from them is written anywhere.
-Expected facts live in expected.yaml and hold no music content.
+Skipped unless SCORE_CORPUS_DIR points at a folder of score PDFs (the part facts
+need SCORE_PARTS_DIR, the `parts/<instrument folder>/<song>.pdf` tree). Never run
+in CI. The scores and parts are read in place; nothing from them is written
+anywhere. Expected facts live in expected.yaml and hold no music content.
 """
 
+import importlib.util
 import os
+import shutil
 from pathlib import Path
 
 import pytest
 import yaml
 
-from score_parser import parse_score
+from part_lookup import find_parts, parts_of_score
+from score_parser import parse_part, parse_score
 
 EXPECTED = Path(__file__).with_name("expected.yaml")
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "synthetic"
 CORPUS_DIR = os.environ.get("SCORE_CORPUS_DIR")
 
+PARTS_DIR = os.environ.get("SCORE_PARTS_DIR")
+
 needs_corpus = pytest.mark.skipif(not CORPUS_DIR, reason="SCORE_CORPUS_DIR is not set")
+needs_parts = pytest.mark.skipif(not PARTS_DIR, reason="SCORE_PARTS_DIR is not set")
 
 
 def load_expected(path: Path = EXPECTED) -> dict:
@@ -148,12 +155,12 @@ def _fact_label(fact: dict) -> str:
     return f"fact {name!r}"
 
 
-def _with_xfail(fact: dict, problem: str | None) -> list[str]:
+def _with_xfail(fact: dict, problem: str | None, label: str | None = None) -> list[str]:
     """An expected-to-fail fact must keep failing; it is flagged once it passes."""
     reason = fact.get("xfail")
     if not reason:
         return [problem] if problem else []
-    return [] if problem else [f"{_fact_label(fact)} now passes; remove its xfail ({reason})"]
+    return [] if problem else [f"{label or _fact_label(fact)} now passes; remove its xfail ({reason})"]
 
 
 def check_facts(report, facts: dict) -> list[str]:
@@ -189,6 +196,106 @@ def check_facts(report, facts: dict) -> list[str]:
     cap = facts.get("max_features")
     if cap is not None and len(report.features) > cap:
         problems.append(f"{len(report.features)} features found, at most {cap} expected")
+    return problems
+
+
+_PART_KEYS = ("slot", "instrument", "chairs", "relation", "solos", "max_solos", "xfail")
+_SOLO_KEYS = ("page", "mark", "bar", "xfail")
+_RELATIONS = ("same", "doubling", "unexplained", "unknown")
+
+
+def part_shape_problems(facts: dict) -> list[str]:
+    """Part facts that are malformed rather than unmet: a part names a `slot` (its
+    instrument folder) and an `instrument`, takes only the keys of the schema, and
+    an `xfail` needs a reason; a solo needs a `page` and takes `mark`, `bar`, `xfail`."""
+    problems = []
+    for fact in facts.get("parts") or []:
+        for key in ("slot", "instrument"):
+            if not fact.get(key):
+                problems.append(f"part {fact} needs a {key}")
+        problems += [f"part {fact} takes no {key!r}" for key in fact if key not in _PART_KEYS]
+        chairs = fact.get("chairs", [])
+        if not isinstance(chairs, list) or not all(isinstance(c, int) for c in chairs):
+            problems.append(f"part {fact}: chairs must be a list of numbers")
+        if fact.get("relation", "same") not in _RELATIONS:
+            problems.append(f"part {fact}: relation must be one of {', '.join(_RELATIONS)}")
+        if "xfail" in fact and not fact["xfail"]:
+            problems.append(f"part {fact}: xfail needs a reason")
+        for solo in fact.get("solos", []):
+            if "page" not in solo:
+                problems.append(f"solo {solo} of part {fact.get('slot')} needs a page")
+            problems += [f"solo {solo} takes no {key!r}" for key in solo if key not in _SOLO_KEYS]
+            if "xfail" in solo and not solo["xfail"]:
+                problems.append(f"solo {solo}: xfail needs a reason")
+    return problems
+
+
+def _is_part(report, fact: dict) -> bool:
+    info = report.part
+    return (
+        (info.player_slot, info.instrument) == (fact["slot"], fact["instrument"])
+        and ("chairs" not in fact or info.chairs == fact["chairs"])
+        and ("relation" not in fact or info.relation == fact["relation"])
+    )
+
+
+def _solo_order_problem(report, solos: list[dict]) -> str | None:
+    """The solos that are expected to be met must appear in this order in the part
+    (first match after the one before); a missing one is reported on its own."""
+    after = -1
+    for want in solos:
+        found = [i for i, f in enumerate(report.features) if _located(f, want)]
+        if want.get("xfail") or not found:
+            continue
+        later = [i for i in found if i > after]
+        if not later:
+            return f"solo order: {_place(want)} is not after the solo listed before it"
+        after = later[0]
+    return None
+
+
+def _part_problems(report, fact: dict) -> list[str]:
+    problems = []
+    solos = fact.get("solos", [])
+    for want in solos:
+        hit = any(_located(f, want) for f in report.features)
+        problems += _with_xfail(want, None if hit else f"no solo at {_place(want)}", f"solo at {_place(want)}")
+    order = _solo_order_problem(report, solos)
+    if order:
+        problems.append(order)
+    cap = fact.get("max_solos")
+    if cap is not None and len(report.features) > cap:
+        problems.append(f"{len(report.features)} solos found, at most {cap} expected")
+    return problems
+
+
+def _part_fact_problems(reports: list, fact: dict) -> list[str]:
+    candidates = [r for r in reports if _is_part(r, fact)]
+    if not candidates:
+        chairs = f" chairs {fact['chairs']}" if "chairs" in fact else ""
+        relation = f" ({fact['relation']})" if "relation" in fact else ""
+        return [f"no {fact['instrument']} part{chairs}{relation} in player slot {fact['slot']}"]
+    return min((_part_problems(r, fact) for r in candidates), key=len)
+
+
+def check_part_facts(reports: list, facts: list[dict]) -> list[str]:
+    """Mismatches between a score's parts (`PartReport`s) and its `parts:` facts.
+
+    A part fact names the `slot` (the instrument folder the file sits in) and the
+    `instrument` of the filename, optionally `chairs` (exact list), `relation`
+    (same, doubling, unexplained, unknown), `solos` (each `page`, `mark` and `bar`
+    as given, matched exactly; the listed solos must appear in that order, not
+    necessarily adjacent), `max_solos` and `xfail: reason`. A solo takes its own
+    `xfail` and then leaves the order check. Facts the tool does not meet yet
+    keep failing until their xfail is removed.
+    """
+    problems = part_shape_problems({"parts": facts})
+    if problems:
+        return problems
+    for fact in facts:
+        label = f"part {fact['slot']}/{fact['instrument']}"
+        found = _part_fact_problems(reports, fact)
+        problems += _with_xfail(fact, "; ".join(found) if found else None, label)
     return problems
 
 
@@ -365,6 +472,136 @@ def test_order_matches_each_entry_to_the_first_feature_after_the_one_before():
     assert check_facts(report, ordered) == []
 
 
+PART = FIXTURES / "part_one_staff.pdf"  # Trumpet 1: solos at page 1 bar 6 mark A, page 2 bar 16 mark B
+
+
+def place_part(root: Path, folder: str, name: str) -> Path:
+    target = root / folder / f"{name}.pdf"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(PART, target)
+    return target
+
+
+@pytest.fixture
+def trumpet_part(tmp_path):
+    return [parse_part(place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1"))]
+
+
+def part_fact(**fact):
+    return {"slot": "trumpet-1", "instrument": "Trumpet", **fact}
+
+
+def test_part_fact_passes_on_slot_instrument_chairs_and_solos(trumpet_part):
+    fact = part_fact(chairs=[1], solos=[{"page": 1, "mark": "A", "bar": 6}, {"page": 2, "mark": "B"}])
+    assert check_part_facts(trumpet_part, [fact]) == []
+    assert check_part_facts(trumpet_part, [part_fact()]) == []  # chairs and solos are optional
+
+
+@pytest.mark.parametrize(
+    "fact",
+    [
+        {"slot": "trumpet-2", "instrument": "Trumpet"},  # another player slot
+        {"slot": "trumpet-1", "instrument": "Trombone"},
+        part_fact(chairs=[2]),
+        part_fact(chairs=[1, 2]),
+        part_fact(relation="doubling"),
+    ],
+)
+def test_part_fact_reports_a_part_that_is_not_there(trumpet_part, fact):
+    assert len(check_part_facts(trumpet_part, [fact])) == 1
+
+
+def test_part_relation_to_the_slot_can_be_asserted(trumpet_part):
+    assert check_part_facts(trumpet_part, [part_fact(relation="same")]) == []
+
+
+def test_part_solo_page_mark_and_bar_must_match_exactly(trumpet_part):
+    for solo in ({"page": 1, "mark": "B"}, {"page": 3, "mark": "A"}, {"page": 1, "mark": "A", "bar": 7}):
+        problems = check_part_facts(trumpet_part, [part_fact(solos=[solo])])
+        assert len(problems) == 1 and "solo" in problems[0], solo
+
+
+def test_part_solos_must_appear_in_the_listed_order(trumpet_part):
+    inverted = [{"page": 2, "mark": "B"}, {"page": 1, "mark": "A"}]
+    problems = check_part_facts(trumpet_part, [part_fact(solos=inverted)])
+    assert len(problems) == 1 and "order" in problems[0]
+
+
+def test_max_solos_caps_the_part_solo_count(trumpet_part):
+    assert check_part_facts(trumpet_part, [part_fact(max_solos=2)]) == []
+    assert check_part_facts(trumpet_part, [part_fact(max_solos=1)])
+
+
+def test_expected_to_fail_part_and_solo_facts_must_keep_failing(trumpet_part):
+    gone = {"slot": "tuba", "instrument": "Tuba", "xfail": "the part is not found yet"}
+    assert check_part_facts(trumpet_part, [gone]) == []
+    here = part_fact(xfail="stale")
+    problems = check_part_facts(trumpet_part, [here])
+    assert len(problems) == 1 and "now passes" in problems[0]
+    wrong = part_fact(solos=[{"page": 1, "mark": "C", "xfail": "known gap"}])
+    assert check_part_facts(trumpet_part, [wrong]) == []
+    right = part_fact(solos=[{"page": 1, "mark": "A", "xfail": "stale"}])
+    assert "now passes" in check_part_facts(trumpet_part, [right])[0]
+
+
+def test_an_expected_to_fail_solo_does_not_break_the_order_of_the_others(trumpet_part):
+    solos = [{"page": 1, "mark": "C", "xfail": "known gap"}, {"page": 2, "mark": "B"}]
+    assert check_part_facts(trumpet_part, [part_fact(solos=solos)]) == []
+
+
+def test_two_parts_in_one_slot_are_told_apart_by_instrument_and_chair(tmp_path):
+    reports = [
+        parse_part(place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1")),
+        parse_part(place_part(tmp_path, "trumpet-1", "Synthetic Tune Flugelhorn")),
+    ]
+    assert check_part_facts(reports, [part_fact(), {"slot": "trumpet-1", "instrument": "Flugelhorn"}]) == []
+
+
+def test_malformed_part_facts_are_rejected_not_ignored(trumpet_part):
+    for fact in (
+        {"instrument": "Trumpet"},  # no slot
+        {"slot": "trumpet-1"},  # no instrument
+        part_fact(solos=[{"mark": "A"}]),  # no page
+        part_fact(solos=[{"page": 1, "colour": "red"}]),
+        part_fact(colour="red"),
+        part_fact(relation="friends"),
+        part_fact(chairs=1),
+        part_fact(xfail=""),
+        part_fact(solos=[{"page": 1, "xfail": ""}]),
+    ):
+        assert check_part_facts(trumpet_part, [fact]), fact
+        assert part_shape_problems({"parts": [fact]}), fact
+
+
+def test_find_parts_matches_the_song_title_across_every_instrument_folder(tmp_path):
+    wanted = [
+        place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1"),
+        place_part(tmp_path, "alto-sax-1", "Synthetic Tune Clarinet"),  # a doubling: another folder
+        place_part(tmp_path, "tenor-sax-1", "SYNTHETIC TUNE (copy) Soprano Sax"),  # case and noise do not matter
+    ]
+    place_part(tmp_path, "trumpet-2", "Another Number Trpt2")  # another song
+    place_part(tmp_path, "scores", "Synthetic Tune SCORE")  # a conductor score is not a part
+    (tmp_path / "MANIFEST.csv").write_text("not a folder\n")
+
+    assert find_parts(tmp_path, "Synthetic Tune") == sorted(wanted)
+
+
+def test_find_parts_ignores_a_score_title_that_only_shares_a_word(tmp_path):
+    place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1")
+    place_part(tmp_path, "trumpet-2", "In The Long Winter 10:15 Trpt2")
+
+    assert find_parts(tmp_path, "Tune") == []
+    place_part(tmp_path, "trumpet-3", "Away In A Manger Trpt3")
+    assert find_parts(tmp_path, "Holiday In 11.3.26") == []  # "In" is shared, the song is not
+    assert find_parts(tmp_path / "missing", "Synthetic Tune") == []
+
+
+def test_parts_of_a_score_are_found_by_the_cleaned_score_file_name(tmp_path):
+    place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1")
+    parts = parts_of_score(tmp_path, "Synthetic Tune 11.3.26 - Score ")
+    assert [(r.part.player_slot, r.part.instrument) for r in parts] == [("trumpet-1", "Trumpet")]
+
+
 def test_expected_facts_file_loads_and_each_entry_is_well_formed():
     expected = load_expected()
     assert isinstance(expected, dict)
@@ -374,6 +611,7 @@ def test_expected_facts_file_loads_and_each_entry_is_well_formed():
             if "xfail" in want:
                 assert want["xfail"], f"{stem}: xfail needs a reason"
         assert shape_problems(facts) == [], stem
+        assert part_shape_problems(facts) == [], stem
 
 
 @needs_corpus
@@ -390,3 +628,45 @@ def test_corpus_score_matches_approved_facts(stem):
     pdf = Path(CORPUS_DIR) / f"{stem}.pdf"
     assert pdf.exists(), f"{pdf.name} not found in SCORE_CORPUS_DIR"
     assert check_facts(parse_score(pdf), load_expected()[stem]) == []
+
+
+@needs_parts
+@pytest.mark.parametrize("stem", sorted(s for s, facts in load_expected().items() if facts.get("parts")))
+def test_corpus_score_parts_match_approved_facts(stem):
+    reports = parts_of_score(Path(PARTS_DIR), stem)
+    assert reports, f"no parts found in SCORE_PARTS_DIR for {stem!r}"
+    assert check_part_facts(reports, load_expected()[stem]["parts"]) == []
+
+
+def _corpus_counts_main():
+    spec = importlib.util.spec_from_file_location("corpus_counts", Path(__file__).parents[2] / "scripts" / "corpus_counts.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.main
+
+
+def test_corpus_counts_adds_parts_found_and_part_solos_per_score(tmp_path, capsys):
+    scores = tmp_path / "scores"
+    scores.mkdir()
+    shutil.copy(FIXTURES / "finale_solos.pdf", scores / "Synthetic Tune - Score.pdf")
+    parts = tmp_path / "parts"
+    place_part(parts, "trumpet-1", "Synthetic Tune Trpt1")
+    place_part(parts, "trumpet-2", "Synthetic Tune Trpt2")
+    place_part(parts, "trumpet-3", "Other Song Trpt3")
+
+    before = sorted(tmp_path.rglob("*"))
+    assert _corpus_counts_main()([str(scores), "--parts-dir", str(parts)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+
+    assert lines[0].split()[-2:] == ["parts", "part_solos"]
+    assert lines[1].split()[-2:] == ["2", "4"]  # two parts, two solos each
+    assert lines[-1].split()[-2:] == ["2", "4"]
+    assert sorted(tmp_path.rglob("*")) == before  # writes nothing
+
+
+def test_corpus_counts_without_a_parts_folder_keeps_its_columns(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("SCORE_PARTS_DIR", raising=False)
+    shutil.copy(FIXTURES / "finale_solos.pdf", tmp_path / "Synthetic Tune - Score.pdf")
+
+    assert _corpus_counts_main()([str(tmp_path), "--parts-dir", ""]) == 0
+    assert "parts" not in capsys.readouterr().out.splitlines()[0]

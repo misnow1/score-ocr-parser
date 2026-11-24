@@ -91,7 +91,7 @@ report.part.instrument, report.part.chairs, report.part.relation, report.feature
 SCORE_CORPUS_DIR=/path/to/scores uv run pytest tests/corpus
 ```
 
-The scores are read in place; nothing is copied or written. One test checks that every PDF in the folder parses. The others compare each score with the approved facts in `tests/corpus/expected.yaml`. Pages and bars match exactly (no tolerance), so a bar one off fails.
+The scores are read in place; nothing is copied or written. The part facts (below) also need `SCORE_PARTS_DIR=/path/to/parts`. One test checks that every PDF in the folder parses. The others compare each score with the approved facts in `tests/corpus/expected.yaml`. Pages and bars match exactly (no tolerance), so a bar one off fails.
 
 To add facts, first get the user's approval for each one, then add an entry keyed by the PDF file name without `.pdf`:
 
@@ -110,6 +110,10 @@ scores:
     order:                            # features in score order, not necessarily adjacent
       - {instrument: Piano, page: 1}
       - {instrument: Tuba, section: B}
+    parts:                            # part files of the song (needs SCORE_PARTS_DIR)
+      - {slot: alto-sax-1, instrument: Clarinet, relation: doubling, solos: [{page: 1, mark: A, bar: 9}, {page: 8, mark: F}]}
+      - {slot: trumpet-3, instrument: Trumpet, chairs: [3], max_solos: 0}
+      - {slot: bass, instrument: Electric Bass, xfail: "why the part is not met yet"}
 ```
 
 - Instrument keys: `name`, `chairs` (the instrument's chairs must equal this list exactly) and `xfail`.
@@ -119,9 +123,11 @@ scores:
 - `xfail: reason` records a fact the tool does not meet yet. It must keep failing: once it passes, the test fails and asks you to remove the `xfail`.
 - `not_features` lists instrument features that must not be found (given `page`, `bar` or `mark` to narrow them down).
 
-Facts stay short and hold no music content: instrument names, page, bar and marker only.
+- `parts` lists the song's part files (ADR 0004): who plays what, which the score cannot say. The parts are read in place from `SCORE_PARTS_DIR`, the `parts/<instrument folder>/<song file>.pdf` tree (opt-in like `SCORE_CORPUS_DIR`: the part tests skip without it and never run in CI). A song's parts are found by matching the cleaned song title of each filename to the score's file name, across every instrument folder except `scores/`; the title match is on whole titles, ignoring words with digits (dates, "JC2026"). A part gives `slot` (the instrument folder it sits in: the player slot) and `instrument` (the filename's part word, so a Clarinet part in `alto-sax-1/` is `{slot: alto-sax-1, instrument: Clarinet}`), and optionally `chairs` (the part's chairs equal this list exactly), `relation` (`same`, `doubling`, `unexplained` or `unknown`, as `part.relation`), `max_solos` and `solos`. A solo gives `page` and, when known, `mark` and `bar`, matched exactly; the listed solos must appear in that order in the part, not necessarily next to each other. A part and a solo each take `xfail: reason` (a solo with an xfail leaves the order check). A part fact that names no such part is a mismatch, and a malformed part fact (no slot or instrument, an unknown key, a solo with no page, an empty xfail) is reported, not ignored.
 
-`scripts/corpus_counts.py [DIR]` (default `$SCORE_CORPUS_DIR`) prints per-score counts to stdout: instruments, features, features with no bar, features with no instrument, features with no rehearsal mark, features whose mark is carried from an earlier page and warnings, so two runs can be compared. Rows are numbered by sorted position; `--names` adds the file names. It prints numbers only and writes nothing.
+Facts stay short and hold no music content: instrument names, page, bar and marker only (for a part, its player slot, instrument and chairs; never a file name).
+
+`scripts/corpus_counts.py [DIR]` (default `$SCORE_CORPUS_DIR`) prints per-score counts to stdout: instruments, features, features with no bar, features with no instrument, features with no rehearsal mark, features whose mark is carried from an earlier page and warnings, so two runs can be compared. With `--parts-dir DIR` (default `$SCORE_PARTS_DIR`) it adds two columns: the parts found for each score (by song title, as above) and the solos read in them. Rows are numbered by sorted position; `--names` adds the file names. It prints numbers only and writes nothing.
 
 ## Licensing
 

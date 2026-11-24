@@ -30,6 +30,20 @@
 # "Tuba p8 follows Piano p1" without exact bars. An entry names one instrument (a shared feature matches
 # by any of its instruments) and takes no `instruments`, `open`, `kind: shared` or `xfail`.
 #
+# `parts:` lists the part files of the song (the one-instrument PDFs in the `parts/<instrument folder>/` tree,
+# found in SCORE_PARTS_DIR by the song title of their file names; opt-in like SCORE_CORPUS_DIR) with who plays
+# them and their solos; no file names, only names, pages and marks. A part names `slot` (the instrument folder
+# it sits in: who plays it) and `instrument` (the filename's part word), and may give `chairs` (the exact list),
+# `relation` (same, doubling, unexplained, unknown), `max_solos` and `solos`. A solo gives `page`, and `mark`
+# and `bar` when known (exact, like features); the listed solos must appear in that order in the part, not
+# necessarily adjacent, so a section and its order count before exact bars. A part and a solo take `xfail`;
+# a solo with an xfail leaves the order check.
+#
+#     parts:
+#       - {slot: alto-sax-1, instrument: Clarinet, relation: doubling, solos: [{page: 1, mark: A, bar: 9}, {page: 8, mark: F}]}
+#       - {slot: trumpet-3, instrument: Trumpet, chairs: [3], max_solos: 0}
+#       - {slot: bass, instrument: Electric Bass, xfail: "why the part is not met yet"}
+#
 # `xfail: reason` marks a fact the tool does not meet yet. It must keep
 # failing; once it passes, the suite says to remove the xfail.
 scores:
