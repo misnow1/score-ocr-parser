@@ -245,3 +245,35 @@ def test_a_part_given_to_score_mode_behaves_as_before(tmp_path):
 
     assert report.instrumentation == []  # no label column: the score reader finds no instruments
     assert "no instrumentation found: the first system's labels could not be read" in report.warnings
+
+
+OVERPRINTED = FIXTURES / "part_overprinted_labels.pdf"
+UNCONFIRMED = FIXTURES / "part_overprinted_unconfirmed.pdf"
+
+
+def test_overprinted_staff_start_labels_are_two_numbers_and_the_solo_is_at_its_true_bar(tmp_path):
+    # Staff 1 starts at bar 33 and holds rests of 7, 8 and 8 bars; staff 2's number 56 is
+    # printed on top of the 33 (from underneath), and the next pair is 60 and 64.
+    report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", OVERPRINTED))
+
+    assert [(f.page, f.bar) for f in report.features] == [(1, 56), (1, 65)]  # no solo at bar 33
+    reasons = " ".join(report.features[0].reasons)
+    assert "overprinted" in reasons and "33" in reasons and "56" in reasons
+
+
+def test_overprinted_labels_confirmed_by_the_rest_count_keep_full_bar_confidence(tmp_path):
+    report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", OVERPRINTED))
+
+    assert [f.confidence for f in report.features] == [0.75, 0.75]  # the same as a plainly counted bar
+    assert "not confirmed" not in " ".join(report.features[0].reasons)
+
+
+def test_overprinted_labels_the_rests_do_not_confirm_keep_the_later_number_with_a_reason(tmp_path):
+    # The rests add up to 7 + 8 + 7: 33 + 22 bars is 55, not the 56 printed.
+    report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", UNCONFIRMED))
+
+    assert [(f.page, f.bar) for f in report.features] == [(1, 56), (1, 65)]
+    first = report.features[0]
+    assert first.confidence == 0.7  # 0.05 below a counted bar
+    assert "not confirmed by counting the multi-bar rests" in " ".join(first.reasons)
+    assert report.features[1].confidence == 0.75  # the later pair (60, 64) still counts out

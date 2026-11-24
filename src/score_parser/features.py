@@ -39,6 +39,7 @@ BAR_EVIDENCE: dict[BarKind, float] = {
     "continued": BAR_GUESSED,  # counted on from the previous system, no number here
     "assumed": BAR_GUESSED,  # text sits left of every bar number
     "ocr": BAR_GUESSED,  # barlines cannot be counted on a scan
+    "overprinted": BAR_GUESSED,  # a part's staff-start number read from an overprinted pair, rests did not confirm it
     "missing": 0.0,
 }
 MARK_CARRIED = 0.05  # penalty: the rehearsal mark is carried from an earlier page, not printed on the feature's own

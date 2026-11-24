@@ -972,12 +972,12 @@ PART_STAFF_TOP = 150
 PART_BARLINES = (60, 220, 320, 400, 480, 560)  # five bars per system
 
 
-def _part_system(page, top: float, glyph_font: Path, texts) -> None:
+def _part_system(page, top: float, glyph_font: Path, texts, barlines=PART_BARLINES) -> None:
     """One staff of a part: five lines, barlines, a clef-and-key glyph run
     ("&bb") in a font the music-font list does not know, and texts."""
     for i in range(5):
         page.draw_line((60, top + 6 * i), (560, top + 6 * i))
-    for x in PART_BARLINES:
+    for x in barlines:
         page.draw_line((x, top), (x, top + 24))
     page.insert_text((62, top + 20), "&bb", fontfile=str(glyph_font), fontname="SynGlyphs", fontsize=14)
     for x, y, text, size in texts:
@@ -1012,6 +1012,37 @@ def one_staff_part(glyph_font: Path, out: Path) -> None:
         (50, top - 11, "14", 7),
         (340, top - 8, "SOLO", 9),
     ])
+    doc.save(out)
+
+
+def overprinted_labels_part(glyph_font: Path, out: Path, rests: tuple[int, int, int] = (7, 8, 8)) -> None:
+    """A part that prints each staff's first bar under the staff, and the next
+    staff's number above it, one on top of the other (as 33 and 56 below).
+    Four staves 63 pt apart: the first starts at bar 33 and holds three multi-bar
+    rests (`rests`, set above the staff, with mid-staff numbers 40 and 48); the
+    second starts at 56 (numbers 33 and 56 overprinted) with a "SOLO" in its
+    first bar; the third starts at 60 and the fourth at 64 (60 and 64
+    overprinted), with a "SOLO" in its second bar (bar 65). Each staff has four
+    bars after the first, so 56 + 4 = 60 and 60 + 4 = 64 confirm the numbers."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Overprint Tune", fontname="helv", fontsize=24)
+    tops = [150 + 87 * i for i in range(4)]
+    four_bars = (60, 200, 340, 480, 560)
+    rest_x = (150, 290, 450)
+    _part_system(page, tops[0], glyph_font, [
+        *((x, tops[0] - 8, str(n), 24) for x, n in zip(rest_x, rests)),
+        (225, tops[0] - 14, "40", 15), (385, tops[0] - 14, "48", 15),
+    ], barlines=(60, 220, 380, 540))
+    _part_system(page, tops[1], glyph_font, [
+        (90, tops[1] - 6, "SOLO", 9), (130, tops[1] - 12, "Dmin7", 12), (230, tops[1] - 12, "G7", 12),
+    ], barlines=four_bars)
+    _part_system(page, tops[2], glyph_font, [(130, tops[2] - 12, "F6", 12)], barlines=four_bars)
+    _part_system(page, tops[3], glyph_font, [(300, tops[3] - 6, "SOLO", 9)], barlines=four_bars)
+    for top, below, above in zip(tops, (33, 56, 60, 64), (None, 56, None, 64)):
+        page.insert_text((50, top + 24 + 19), str(below), fontname="helv", fontsize=12)  # under the staff
+        if above:
+            page.insert_text((47, top - 44), str(above), fontname="helv", fontsize=15)
     doc.save(out)
 
 
@@ -1109,6 +1140,8 @@ def main() -> None:
         build_music_font(glyphs, family="SynGlyphs", chars="&b")
         one_staff_part(glyphs, OUT / "part_one_staff.pdf")
         one_line_part(OUT / "part_one_line.pdf")
+        overprinted_labels_part(glyphs, OUT / "part_overprinted_labels.pdf")
+        overprinted_labels_part(glyphs, OUT / "part_overprinted_unconfirmed.pdf", rests=(7, 8, 7))
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     scanned(OUT / "label_repair_ocr_misreads.pdf", OUT / "scan_label_misreads.pdf", 300)
