@@ -1071,7 +1071,7 @@ def cross_reference_part(glyph_font: Path, out: Path, staves) -> None:
         page = doc.new_page(width=612, height=792)
         for row, (first, mark, interval, wording) in enumerate(pages[number]):
             top = PART_STAFF_TOP + 150 * row
-            texts = [(50, top - 11, str(first), 7)] if first is not None else []
+            texts = [(50, top - 11, str(first), 7)]
             if mark:
                 texts.append((200, top - 18, mark, 12))
             if interval is not None:

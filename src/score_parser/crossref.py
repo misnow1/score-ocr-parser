@@ -29,7 +29,7 @@ from .models import Feature, InstrumentEntry, Location, Participant, PartReport,
 
 NEAR_BARS = 4  # solos this close, at one mark, are one solo
 OPEN_JOIN_BARS = 6  # a part solo this close to an open feature's bar names its soloist
-MAX_PART_SOLOS = 6  # a part with more distinct solos than this is noise: it can only confirm
+MAX_PART_SOLOS = 4  # a part with more distinct solos than this is noise: it can only confirm
 PART_NAMED = 0.3  # evidence: the soloist comes from a part, like a name in the marking's text
 FOUND_IN_PART = 0.7  # confidence of a feature only a part shows (below the flow draft's TODO threshold)
 _UNREADABLE = ("could not be read", "no staves found")
@@ -45,7 +45,7 @@ class Claim:
     instrument: str
     chair: int | None
     ambiguous: bool
-    solos: int  # the part's distinct solos
+    noise: str | None  # why the part's solos are not to be trusted to name or add soloists
 
     @property
     def mark(self) -> str | None:
@@ -60,9 +60,7 @@ class Claim:
         """Why this part's solos can only confirm, never name or add a soloist."""
         if _is_vocal(self.part):
             return "a vocal part's solo markings are trusted only where the score names the voice"
-        if self.solos > MAX_PART_SOLOS:
-            return f"the part has too many solos ({self.solos}) to be trusted to name or add soloists"
-        return None
+        return self.noise
 
     @property
     def where(self) -> str:
@@ -115,10 +113,17 @@ def _where(f: Feature) -> str:
     return ", ".join(found) or f"page {f.page}"
 
 
-def _claim_of(part: PartReport, index: int, feature: Feature, solos: int) -> Claim:
+def _noise(solos: list[Feature]) -> str | None:
+    """Why a part's distinct solos read as noise: far too many."""
+    if len(solos) > MAX_PART_SOLOS:
+        return f"the part has too many solos ({len(solos)}) to be trusted to name or add soloists"
+    return None
+
+
+def _claim_of(part: PartReport, index: int, feature: Feature, noise: str | None) -> Claim:
     chairs = part.part.chairs
     chair = chairs[0] if len(chairs) == 1 else None
-    return Claim(part, index, feature, part.part.instrument or "", chair, len(chairs) > 1, solos)
+    return Claim(part, index, feature, part.part.instrument or "", chair, len(chairs) > 1, noise)
 
 
 def _gap(bar: int | None, other: int | None) -> int | None:
@@ -267,7 +272,7 @@ class _CrossReference:
             solos = distinct_solos(part.features)
             for f in solos:
                 if f.kind != "vocal lead" and (f.instrument is None or present_as(f.instrument, _names(part))):
-                    found.append(_claim_of(part, index, f, len(solos)))
+                    found.append(_claim_of(part, index, f, _noise(solos)))
         return sorted(found, key=lambda c: (self.order.get(c.instrument, 10**6), c.chair or 0, c.index))
 
     def cues(self) -> None:
