@@ -123,7 +123,7 @@ def find_part_systems(page: Page, label: str, one_line: bool = False) -> list[Sy
     for tok, i in rests:
         systems[i].rests.append(((tok.x0 + tok.x1) / 2, int(tok.text)))
     skip = {id(tok) for tok, _ in rests}
-    starts, read = read_start_labels(staves, [t for t in page.tokens if id(t) not in skip])
+    starts, placed, read = read_start_labels(staves, [t for t in page.tokens if id(t) not in skip])
     skip |= {id(tok) for tok in read}
     furniture = staves[0].centre - BAR_ROW_REACH
     rows = [row for ln in lines(page.tokens) if (row := [t for t in ln if id(t) not in skip]) and row[0].yc >= furniture]
@@ -131,8 +131,8 @@ def find_part_systems(page: Page, label: str, one_line: bool = False) -> list[Sy
     for system, staff in zip(systems, staves):
         system.bars = [bar for bar in system.bars if bar[0] <= staff.left + START_REACH]
     for i, (system, start) in enumerate(zip(systems, starts)):
+        system.bars = sorted([*system.bars, *((t.x0, int(t.text), t.x1) for t in placed[i])])
         if start:
-            system.bars = sorted([*system.bars, (start.token.x0, start.number, start.token.x1)])
             system.start_note = _overprint_note(start, starts[i - 1] if i else None, systems[i - 1] if i else None)
     return systems
 

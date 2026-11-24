@@ -1,15 +1,19 @@
-"""Staff-start bar numbers of a part, read as a sequence down the page.
+"""Staff-start bar numbers of a part that prints them both above and under a staff.
 
-A part prints the bar a staff starts at near its left end. Some parts print it
-above the staff and some under the staff before it, and when both are printed
-the pair can sit in one spot: a number under one staff and the number above the
-next, one on top of the other. A single number in the gap between two staves is
-then either the next staff's label or the first staff's, so the gaps are read
-top to bottom: a number that repeats the label of the staff above it is that
-staff's, and two different numbers in one gap are the first staff's (the lower)
-and the next staff's (the higher). Whether the pair is right is checked by
-counting the bars of the first staff (multi-bar rests included) from its number
-to the next one.
+A part prints the bar a staff starts at near its left end, usually above the
+staff. Some also print it under the staff, and then the number under one staff
+and the number above the next can sit in one spot, one on top of the other
+(a "B" number below: one that sits in both the band above a staff and the band
+under the staff before it). Read top to bottom, a gap between two staves holds:
+
+- two different B numbers (an overprinted pair): the lower is the staff above's
+  and the higher the next staff's. The higher is checked by counting the bars of
+  the staff above from its own number, multi-bar rests included;
+- one B number that repeats the label of the staff above: that staff's own
+  number, printed twice, and not the next staff's.
+
+Every other number is left to the plain bar-row reading, which reads a number
+above a staff as its label.
 """
 
 from dataclasses import dataclass
@@ -40,59 +44,59 @@ def _is_number(tok: Token) -> bool:
     return tok.text.isdigit() and len(tok.text) <= 3
 
 
-def _gap_of(staves: list[Staff], tok: Token) -> tuple[int, bool, bool] | None:
-    """(gap, above, under) for a number at the left end of a staff, or None. The
-    gap is the index of the staff below the number (len(staves) under the last
-    one); `above` and `under` say whether it sits in the band above that staff
-    and in the band under the staff before it. A number inside a staff's span
-    is the time signature or a key, not a label."""
+def _gap_of(staves: list[Staff], tok: Token) -> tuple[int, bool] | None:
+    """(the staff below, whether it also sits under the staff before) for a
+    number at the left end of a staff, in the band above that staff, or None. A
+    number inside a staff's span is the time signature or a key, not a label."""
     yc = tok.yc
     k = next((i for i, s in enumerate(staves) if yc < s.top), len(staves))
     j = k - 1
     if j >= 0 and yc <= staves[j].bottom:
         return None
-    above = k < len(staves) and above_top(staves[k].top, yc) and tok.x0 <= staves[k].left + START_REACH
-    under = j >= 0 and below_bottom(staves[j].bottom, yc) and tok.x0 <= staves[j].left + START_REACH
-    if not (above or under):
+    if k == len(staves) or not above_top(staves[k].top, yc) or tok.x0 > staves[k].left + START_REACH:
         return None
-    return k, above, under
+    return k, j >= 0 and below_bottom(staves[j].bottom, yc) and tok.x0 <= staves[j].left + START_REACH
 
 
-def read_start_labels(staves: list[Staff], numbers: list[Token]) -> tuple[list[StartLabel | None], list[Token]]:
-    """(the label of each staff, None when it prints none; every number read as
-    a staff-start number, repeats of a label included) from the numbers near
-    the staves' left ends."""
-    gaps: dict[int, list[tuple[Token, bool, bool]]] = {}
-    read = []
+def read_start_labels(
+    staves: list[Staff], numbers: list[Token]
+) -> tuple[list[StartLabel | None], list[list[Token]], list[Token]]:
+    """(the label of each staff, None when it prints none; the numbers placed at
+    each staff's start by the pair and repeat rules above; every number those
+    rules consumed, repeats included). A number outside them is in none of the
+    lists, and the plain bar-row reading handles it."""
+    gaps: dict[int, list[tuple[Token, bool]]] = {}
     for tok in numbers:
         if _is_number(tok) and (found := _gap_of(staves, tok)):
-            gaps.setdefault(found[0], []).append((tok, found[1], found[2]))
-            read.append(tok)
+            gaps.setdefault(found[0], []).append((tok, found[1]))
     labels: list[StartLabel | None] = [None] * len(staves)
+    placed: list[list[Token]] = [[] for _ in staves]
+    consumed: list[Token] = []
 
-    def give(index: int, tok: Token, pair: tuple[int, int] | None = None) -> None:
-        if 0 <= index < len(staves) and labels[index] is None:
+    def label(index: int, tok: Token, pair: tuple[int, int] | None = None, place: bool = True) -> None:
+        if place:
+            placed[index].append(tok)
+            consumed.append(tok)
+        if labels[index] is None or pair or int(tok.text) > labels[index].number:
             labels[index] = StartLabel(tok, int(tok.text), pair)
 
     for k in sorted(gaps):
         j = k - 1
-        values = sorted({int(t.text) for t, _, _ in gaps[k]})
+        above = [t for t, under in gaps[k] if not under]
+        under = [t for t, under in gaps[k] if under]
+        values = sorted({int(t.text) for t in under})
         own = labels[j].number if j >= 0 and labels[j] else None
-        for tok, above, under in sorted(gaps[k], key=lambda e: e[0].x0):
-            value = int(tok.text)
-            if not under:
-                give(k, tok)
-            elif not above:
-                if own in (None, value):
-                    give(j, tok)
-            elif len(values) > 1:
-                if value == values[-1]:
-                    give(k, tok, (values[0], value))
-                elif own in (None, value):
-                    give(j, tok)
-            elif own != value:
-                give(k, tok)
-    return labels, read
+        if len(values) >= 2:
+            for tok in sorted(under, key=lambda t: t.x0):
+                if int(tok.text) == values[-1]:
+                    label(k, tok, (values[0], values[-1]))
+                elif own in (None, int(tok.text)):
+                    label(j, tok)
+        elif values and own == values[0]:
+            consumed.extend(under)  # printed twice: the staff above's own number
+        for tok in above:
+            label(k, tok, place=False)
+    return labels, placed, consumed
 
 
 def confirmed(label: StartLabel, previous: StartLabel | None, barlines: list[float], rests: list[tuple[float, int]]) -> bool:
