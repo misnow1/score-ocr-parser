@@ -972,13 +972,12 @@ PART_STAFF_TOP = 150
 PART_BARLINES = (60, 220, 320, 400, 480, 560)  # five bars per system
 
 
-def _part_system(page, top: float, glyph_font: Path, texts, barlines: bool = True) -> None:
-    """One staff of a part: five lines, barlines (unless `barlines` is off), a
-    clef-and-key glyph run ("&bb") in a font the music-font list does not know,
-    and texts."""
+def _part_system(page, top: float, glyph_font: Path, texts, barlines=PART_BARLINES) -> None:
+    """One staff of a part: five lines, barlines, a clef-and-key glyph run
+    ("&bb") in a font the music-font list does not know, and texts."""
     for i in range(5):
         page.draw_line((60, top + 6 * i), (560, top + 6 * i))
-    for x in PART_BARLINES if barlines else ():
+    for x in barlines:
         page.draw_line((x, top), (x, top + 24))
     page.insert_text((62, top + 20), "&bb", fontfile=str(glyph_font), fontname="SynGlyphs", fontsize=14)
     for x, y, text, size in texts:
@@ -1012,6 +1011,126 @@ def one_staff_part(glyph_font: Path, out: Path) -> None:
     _part_system(p2, top, glyph_font, [
         (50, top - 11, "14", 7),
         (340, top - 8, "SOLO", 9),
+    ])
+    doc.save(out)
+
+
+def overprinted_labels_part(
+    glyph_font: Path, out: Path, rests: tuple[int, int, int] = (7, 8, 8), lead_in: bool = False
+) -> None:
+    """A part that prints each staff's first bar under the staff, and the next
+    staff's number above it, one on top of the other (as 33 and 56 below).
+    Four staves 63 pt apart: the first starts at bar 33 and holds three multi-bar
+    rests (`rests`, set above the staff, with mid-staff numbers 40 and 48); the
+    second starts at 56 (numbers 33 and 56 overprinted) with a "SOLO" in its
+    first bar; the third starts at 60 and the fourth at 64 (60 and 64
+    overprinted), with a "SOLO" in its second bar (bar 65). Each staff has four
+    bars after the first, so 56 + 4 = 60 and 60 + 4 = 64 confirm the numbers.
+    With `lead_in`, a staff of four bars numbered 29 (above) comes first, so the
+    33 is also confirmed by counting on from it."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Overprint Tune", fontname="helv", fontsize=24)
+    four_bars = (60, 200, 340, 480, 560)
+    rest_x = (150, 290, 450)
+    tops = [150 + 87 * i for i in range(4 + lead_in)]
+    first = tops[1:] if lead_in else tops
+    if lead_in:
+        _part_system(page, tops[0], glyph_font, [(50, tops[0] - 11, "29", 12)], barlines=four_bars)
+    _part_system(page, first[0], glyph_font, [
+        *((x, first[0] - 8, str(n), 24) for x, n in zip(rest_x, rests)),
+        (225, first[0] - 14, "40", 15), (385, first[0] - 14, "48", 15),
+    ], barlines=(60, 220, 380, 540))
+    _part_system(page, first[1], glyph_font, [
+        (90, first[1] - 6, "SOLO", 9), (130, first[1] - 12, "Dmin7", 12), (230, first[1] - 12, "G7", 12),
+    ], barlines=four_bars)
+    _part_system(page, first[2], glyph_font, [(130, first[2] - 12, "F6", 12)], barlines=four_bars)
+    _part_system(page, first[3], glyph_font, [(300, first[3] - 6, "SOLO", 9)], barlines=four_bars)
+    for top, below, above in zip(first, (33, 56, 60, 64), (None, 56, None, 64)):
+        page.insert_text((50, top + 24 + 19), str(below), fontname="helv", fontsize=12)  # under the staff
+        if above:
+            page.insert_text((47, top - 44), str(above), fontname="helv", fontsize=15)
+    doc.save(out)
+
+
+def same_number_staves_part(glyph_font: Path, out: Path) -> None:
+    """Two pairs of close staves (21 pt apart, no barlines between them), each
+    staff printing its own bar number just above itself: 1 and 1, then 6 and 6.
+    The number above the second staff of a pair also sits in the band under the
+    first, but it is that staff's own, not a repeat of the first's. A "SOLO" in
+    the second bar of the last staff (bar 7)."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Same Number Tune", fontname="helv", fontsize=24)
+    for top, number in ((150, 1), (195, 1), (300, 6), (345, 6)):
+        texts = [(50, top - 6, str(number), 7)]
+        if top == 345:
+            texts.append((250, top - 6, "SOLO", 9))
+        _part_system(page, top, glyph_font, texts)
+    doc.save(out)
+
+
+def repeated_number_part(glyph_font: Path, out: Path) -> None:
+    """A staff numbered 1 (above the staff and again under it) and an unnumbered
+    staff after it with a "SOLO" in its first bar (bar 6: the five bars of the
+    first staff on). The number under the first staff is its own, not the next
+    staff's."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Repeated Number Tune", fontname="helv", fontsize=24)
+    _part_system(page, 150, glyph_font, [(50, 150 - 20, "1", 12), (50, 150 + 24 + 23, "1", 12)])
+    _part_system(page, 237, glyph_font, [(90, 237 - 6, "SOLO", 9)])
+    doc.save(out)
+
+
+def joined_staves_part(glyph_font: Path, out: Path) -> None:
+    """Two staves of one system (rules run through both at two barlines), the
+    upper numbered 1 and the gap between them holding another 1 and a stray 3. Both
+    staves share their bars, so there is no staff-start pair here. A "SOLO" in the
+    second bar of the lower staff."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Joined Staves Tune", fontname="helv", fontsize=24)
+    _part_system(page, 150, glyph_font, [(50, 150 - 20, "1", 12)])
+    _part_system(page, 195, glyph_font, [(50, 195 - 3, "1", 12), (75, 195 - 4, "3", 9), (250, 195 - 6, "SOLO", 9)])
+    for x in (60, 220):
+        page.draw_line((x, 150), (x, 195 + 24))
+    doc.save(out)
+
+
+def stray_number_part(glyph_font: Path, out: Path) -> None:
+    """An unnumbered first staff with a "SOLO" in its second bar (bar 2), then a
+    staff numbered 6 that also has a stray "2" printed at its start (a volta or
+    the chair of a cue) in the gap above it, with a "SOLO" in its second bar (bar 7). The
+    2 is no bar number: five bars from it would not reach 6."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Stray Number Tune", fontname="helv", fontsize=24)
+    _part_system(page, 150, glyph_font, [(250, 150 - 6, "SOLO", 9)])
+    _part_system(page, 237, glyph_font, [
+        (50, 237 - 37, "6", 12), (75, 237 - 41, "2", 9), (250, 237 - 6, "SOLO", 9),
+    ])
+    doc.save(out)
+
+
+def rests_above_part(glyph_font: Path, out: Path) -> None:
+    """One unnumbered staff of five bars, with digits above its top line in each
+    of the first four: a staff-sized "4" crossing the top line by under a point
+    (a rest of four bars, as some music fonts set it, 1.1 staff heights tall), a
+    "3" as tall as the staff just above the line (a rest of three), a text-sized
+    "3" just above the line (no rest) and a staff-sized "9" well above the line
+    (no rest), then a "SOLO" in the fifth interval: bar 1 + 4 intervals + 3 and
+    2 bars of rests = 10."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((200, 60), "Synthetic Rests Above Tune", fontname="helv", fontsize=24)
+    top = 150
+    _part_system(page, top, glyph_font, [
+        (100, top - 5, "4", 19.5),
+        (260, top - 7, "3", 17.5),
+        (340, top - 3, "3", 9),
+        (420, top - 27, "9", 17.5),
+        (500, top - 6, "SOLO", 9),
     ])
     doc.save(out)
 
@@ -1118,7 +1237,7 @@ def cross_reference_part(glyph_font: Path, out: Path, staves) -> None:
                 texts.append((200, top - 18, mark, 12))
             if interval is not None:
                 texts.append((PART_BARLINES[interval] + 20, top - 8, wording, 9))
-            _part_system(page, top, glyph_font, texts, barlines=first is not None)
+            _part_system(page, top, glyph_font, texts, barlines=PART_BARLINES if first is not None else ())
     doc.save(out)
 
 
@@ -1216,6 +1335,13 @@ def main() -> None:
         build_music_font(glyphs, family="SynGlyphs", chars="&b")
         one_staff_part(glyphs, OUT / "part_one_staff.pdf")
         one_line_part(OUT / "part_one_line.pdf")
+        overprinted_labels_part(glyphs, OUT / "part_overprinted_labels.pdf")
+        overprinted_labels_part(glyphs, OUT / "part_overprinted_unconfirmed.pdf", rests=(7, 8, 7), lead_in=True)
+        same_number_staves_part(glyphs, OUT / "part_same_number_staves.pdf")
+        stray_number_part(glyphs, OUT / "part_stray_number.pdf")
+        repeated_number_part(glyphs, OUT / "part_repeated_number.pdf")
+        joined_staves_part(glyphs, OUT / "part_joined_staves.pdf")
+        rests_above_part(glyphs, OUT / "part_rests_above.pdf")
         cross_reference_score(font, OUT / "finale_cross_reference.pdf")
         cross_reference_shared_score(font, OUT / "finale_cross_reference_shared.pdf")
         cross_reference_reused_score(font, OUT / "finale_cross_reference_reused.pdf")
