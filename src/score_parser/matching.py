@@ -1,12 +1,14 @@
 """Match a score title to an existing planner number slug (read-only)."""
 
 import re
+from functools import cache
 from pathlib import Path
 
 import yaml
 from rapidfuzz import fuzz, process
 
 from .data import load
+from .instruments import resolve
 
 MIN_SCORE = 85
 # A title much shorter than a candidate is not a match however well it sits
@@ -14,10 +16,12 @@ MIN_SCORE = 85
 MIN_LENGTH_RATIO = 0.6
 
 
+def _similar_length(a: str, b: str) -> bool:
+    return min(len(a), len(b)) >= MIN_LENGTH_RATIO * max(len(a), len(b))
+
+
 def _similarity(a: str, b: str, **_) -> float:
-    if min(len(a), len(b)) < MIN_LENGTH_RATIO * max(len(a), len(b)):
-        return 0.0
-    return fuzz.WRatio(a, b)
+    return fuzz.WRatio(a, b) if _similar_length(a, b) else 0.0
 
 
 def slugify(title: str) -> str:
@@ -67,3 +71,83 @@ def match_slug(title: str, numbers_dir: Path) -> str | None:
         return candidates[wanted]
     hit = process.extractOne(wanted, list(candidates), scorer=_similarity, score_cutoff=MIN_SCORE)
     return candidates[hit[0]] if hit else None
+
+
+_INITIALS_YEAR = re.compile(r"\b[a-z]{1,3}(?:19|20)\d{2}\b")  # "jc2026": a year tag, no part of the title
+_GLUED_YEAR = re.compile(r"(?<=[a-z])(?:19|20)\d{2}\b")  # "christmas2022"
+_YEAR_BEFORE_WORD = re.compile(r"\b(?:19|20)\d{2}(?=[a-z])")  # "2026alto"
+_SCORE_WORD = re.compile(r"\bscores?\d*\b")  # "score", "score1"
+_PARENTHESIS = re.compile(r"[(\[][^)\]]*[)\]]?")  # "(expanded instrumentation)", also one left open
+_DATE_RUN = re.compile(r"(?:\b\d{1,2}\b\s*){2,}")  # "10 3 26": a date, however it was punctuated
+_DIGIT_THEN_CAPITAL = re.compile(r"(?<=\d)(?=[A-Z][a-z])")  # "TROMBONE 3The Most"
+_RESIDUE_WINDOW = 3  # words of a title's tail tried as an instrument name
+
+
+def _song_key(title: str) -> str:
+    """A title as words to compare: normalised, with dates, year tags, "score"
+    and the filename noise words of `title_noise` (data/title_aliases.yaml) dropped.
+    A number that is part of a title ("Medley 2") stays."""
+    text = _PARENTHESIS.sub(" ", _DIGIT_THEN_CAPITAL.sub(" ", title).lower())
+    for pattern in (_INITIALS_YEAR, _GLUED_YEAR, _YEAR_BEFORE_WORD):
+        text = pattern.sub(" ", text)
+    words = _SCORE_WORD.sub(" ", _DATE_RUN.sub(" ", _normalise(text))).split()
+    return " ".join(w for w in words if w not in _title_noise())
+
+
+@cache
+def _title_noise() -> frozenset[str]:
+    return frozenset(load("title_aliases.yaml")["title_noise"])
+
+
+def _names_of_song(key: str) -> set[str]:
+    """The key and, when it is a known alias group's name, the whole group."""
+    names = {key}
+    for slug, alternatives in _known_aliases().items():
+        group = {_song_key(slug), *(_song_key(a) for a in alternatives)}
+        if key in group:
+            names |= group
+    return names
+
+
+def _typo_of(a: str, b: str) -> bool:
+    """Same words but for a typo: the same numbers, similar length, and a plain
+    (never partial) similarity of MIN_SCORE."""
+    same_numbers = re.findall(r"\d+", a) == re.findall(r"\d+", b)
+    return same_numbers and _similar_length(a, b) and fuzz.ratio(a, b) >= MIN_SCORE
+
+
+def _is_part_residue(words: list[str]) -> bool:
+    """Whether the words left after a song's title look like a part's own
+    labelling: an instrument ("Violin", "TBN 1 2") or a description of the file
+    ("background", "lyrics only"; `part_descriptions` in data/title_aliases.yaml)."""
+    tail = " ".join(words)
+    descriptions = (_song_key(d) for d in load("title_aliases.yaml")["part_descriptions"])
+    if any(tail == d or tail.startswith(d + " ") for d in descriptions):
+        return True
+    return any(resolve(" ".join(words[:n])) for n in range(1, min(_RESIDUE_WINDOW, len(words)) + 1))
+
+
+def _names_song(key: str, name: str) -> bool:
+    """Whether the file title `key` is the title `name` (or a typo of it),
+    optionally led by an instrument ("Trumpet 1 Christmas Is") and followed by
+    a part's own labelling."""
+    words = key.split()
+    leads = [0, *(n for n in range(1, min(_RESIDUE_WINDOW, len(words)) + 1) if resolve(" ".join(words[:n])))]
+    for lead in leads:
+        rest = words[lead:]
+        for end in range(1, len(rest) + 1):
+            head = " ".join(rest[:end])
+            if (head == name or _typo_of(head, name)) and (end == len(rest) or _is_part_residue(rest[end:])):
+                return True
+    return False
+
+
+def same_song(file_title: str, score_title: str) -> bool:
+    """Whether a part file's cleaned title names the score's song: the same
+    title (case, "the", punctuation, dates and year tags aside), a known alias
+    of it, a typo of either, or the title followed by the part's own labelling
+    ("Christmas Is Violin"). Stricter than match_slug: a title that merely sits
+    inside another ("Christmas Is" in "Christmas Is Coming", "Sing" in "Sing Sing
+    Sing") is a different song."""
+    key = _song_key(file_title)
+    return bool(key) and any(_names_song(key, n) for n in _names_of_song(_song_key(score_title)) if n)

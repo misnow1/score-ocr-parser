@@ -175,4 +175,6 @@ def parse_part(
             warnings.append("no staves found: the part has no drawn staff lines to read solos from")
         features, found = features_in(systems, roster)
         warnings += found
-    return PartReport(title, info, features, [PageInfo.from_page(p) for p in pages], warnings)
+    return PartReport(
+        title, info, features, [PageInfo.from_page(p) for p in pages], warnings, file=f"{path.parent.name}/{path.name}"
+    )
