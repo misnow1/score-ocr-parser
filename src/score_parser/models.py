@@ -146,6 +146,7 @@ class ScoreReport:
     unknown_labels: list[str] = field(default_factory=list)
     pages: list[PageInfo] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    parts: "PartsReport | None" = None  # with parts_dir: the parts found for this song
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -183,6 +184,34 @@ class PartReport:
     features: list[Feature] = field(default_factory=list)
     pages: list[PageInfo] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    file: str = ""  # "<player slot folder>/<file name>": where the part was read from
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class PartsReport:
+    """A score's parts found in a parts tree (`--parts-dir`): the parts matched
+    to the song, in folder then file order, and the files of the tree that are
+    for other songs (or none). Only the song title is matched; every part is
+    read with part mode."""
+
+    parts: list[PartReport] = field(default_factory=list)
+    other_files: list[str] = field(default_factory=list)  # "<folder>/<file>" not matching this song
+
+    @property
+    def doublings(self) -> list[PartReport]:
+        return [p for p in self.parts if p.part.relation == "doubling"]
+
+    @property
+    def unexplained(self) -> list[PartReport]:
+        return [p for p in self.parts if p.part.relation == "unexplained"]
+
+    @property
+    def unreadable(self) -> list[PartReport]:
+        """Matched files whose instrument could not be read."""
+        return [p for p in self.parts if p.part.instrument is None]
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -194,3 +223,4 @@ class ParseOptions:
 
     force_ocr: bool = False
     numbers_dir: Path | None = None  # planner numbers/ dir, read-only
+    parts_dir: Path | None = None  # planner parts/ tree, read-only: find this score's parts

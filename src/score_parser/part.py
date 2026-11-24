@@ -64,12 +64,14 @@ def _part_word(stem: str) -> tuple[Resolved, str] | None:
     """(the instrument named at the end of a filename, the stem before it).
     Windows end at the last word or the one before it; the longest run of
     words that resolves wins, so "Bass Gtr" is not "Gtr", and a run that starts
-    with a bare number is no part word."""
+    with a bare number is no part word. A window never starts inside a bracketed
+    group ("Short Tune (Reprise) Trpt1": the part word is Trpt1, the group stays
+    in the title)."""
     words = _words(stem)
     for end in (len(words), len(words) - 1):
         for n in range(min(MAX_PART_WORDS, end), 0, -1):
             window = words[end - n : end]
-            if window[0].text.isdigit():
+            if window[0].text.isdigit() or window[0].text[0] in "([" or set(window[0].text) & set(")]"):
                 continue
             hit = resolve(_DIGIT_AFTER_LETTER.sub(" ", " ".join(w.text for w in window)))
             if hit:
@@ -175,4 +177,6 @@ def parse_part(
             warnings.append("no staves found: the part has no drawn staff lines to read solos from")
         features, found = features_in(systems, roster)
         warnings += found
-    return PartReport(title, info, features, [PageInfo.from_page(p) for p in pages], warnings)
+    return PartReport(
+        title, info, features, [PageInfo.from_page(p) for p in pages], warnings, file=f"{path.parent.name}/{path.name}"
+    )

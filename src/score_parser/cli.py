@@ -31,6 +31,36 @@ def _print_summary(rows: list[SummaryRow]) -> None:
         print(f"{r.score:<{width}}  {r.instruments:>11}  {r.features:>8}  {r.warnings:>8}")
 
 
+def _print_parts_summary(reports: list[tuple[str, ScoreReport]], failed: int) -> None:
+    """Per-score parts found, the files two songs both match (the risk of a
+    title match), and the files that match no song. When a score failed its
+    parts are unknown, so the files matching no song cannot be told."""
+    found = [(name, r.parts) for name, r in reports if r.parts is not None]
+    if not found:
+        return
+    rows = [(name, *(len(x) for x in (p.parts, p.doublings, p.unexplained, p.unreadable))) for name, p in found]
+    header = ("score", "parts", "doublings", "unexplained", "unreadable")
+    width = max(len(row[0]) for row in [header, *rows])
+    print()
+    for row in [header, *rows]:
+        print(f"{row[0]:<{width}}  {row[1]:>5}  {row[2]:>9}  {row[3]:>11}  {row[4]:>10}")
+    songs_of: dict[str, list[str]] = {}
+    for name, p in found:
+        for part in p.parts:
+            songs_of.setdefault(part.file, []).append(name)
+    twice = {file: names for file, names in songs_of.items() if len(names) > 1}
+    print(f"files matching more than one song: {len(twice)}")
+    for file, names in sorted(twice.items()):
+        print(f"  {file}: {', '.join(names)}")
+    if failed:
+        print(f"files matching no song: not counted, {failed} of the scores failed")
+        return
+    unmatched = sorted({f for _, p in found for f in p.other_files} - songs_of.keys())
+    print(f"files matching no song: {len(unmatched)}")
+    for name in unmatched:
+        print(f"  {name}")
+
+
 def _collect_pdfs(paths: list[str]) -> list[Path]:
     """Files as given; folders expand to their PDFs (any letter case), sorted."""
     pdfs: list[Path] = []
@@ -78,17 +108,25 @@ def _write_outputs(
 def _parse(args: argparse.Namespace) -> int:
     out = Path(args.out)
     numbers_dir = Path(args.numbers_dir) if args.numbers_dir else None
-    if numbers_dir and (out.resolve() == numbers_dir.resolve() or numbers_dir.resolve() in out.resolve().parents):
-        print("refusing to write into the planner numbers directory", file=sys.stderr)
+    parts_dir = Path(args.parts_dir) if args.parts_dir else None
+    for planner_dir, what in ((numbers_dir, "numbers"), (parts_dir, "parts")):
+        if planner_dir and (out.resolve() == planner_dir.resolve() or planner_dir.resolve() in out.resolve().parents):
+            print(f"refusing to write into the planner {what} directory", file=sys.stderr)
+            return 2
+    if parts_dir and not parts_dir.is_dir():
+        print(f"--parts-dir {parts_dir} is not a directory", file=sys.stderr)
         return 2
     out.mkdir(parents=True, exist_ok=True)
     pdfs = _collect_pdfs(args.paths)
     rows: list[SummaryRow] = []
+    reports: list[tuple[str, ScoreReport]] = []
     taken: set[str] = set()
     failed = 0
     for pdf in pdfs:
         try:
-            report = parse_score(pdf, ParseOptions(force_ocr=args.force_ocr, numbers_dir=numbers_dir))
+            report = parse_score(
+                pdf, ParseOptions(force_ocr=args.force_ocr, numbers_dir=numbers_dir, parts_dir=parts_dir)
+            )
             report.warnings += _write_outputs(report, pdf, out, args.format, taken)
         except Exception as exc:  # one bad score must not stop the run
             failed += 1
@@ -96,12 +134,14 @@ def _parse(args: argparse.Namespace) -> int:
             rows.append(SummaryRow(pdf.name, "FAILED", "-", "-"))
             print(f"{pdf.name}: FAILED {msg}", file=sys.stderr)
             continue
+        reports.append((pdf.name, report))
         rows.append(
             SummaryRow(pdf.name, str(len(report.instrumentation)), str(len(report.features)), str(len(report.warnings)))
         )
         for w in report.warnings:
             print(f"  warning ({pdf.name}): {w}", file=sys.stderr)
     _print_summary(rows)
+    _print_parts_summary(reports, failed)
     if failed:
         print(f"{failed} of {len(pdfs)} scores failed", file=sys.stderr)
         return 1
@@ -140,6 +180,9 @@ def main(argv: list[str] | None = None) -> int:
         help="json report, yaml flow draft, or both (default: json)",
     )
     p.add_argument("--numbers-dir", help="planner numbers/ directory (read-only): match titles to slugs")
+    p.add_argument(
+        "--parts-dir", help="planner parts/ tree (read-only): find each score's parts by song title"
+    )
     p.add_argument("--force-ocr", action="store_true", help="OCR every page, ignoring any text layer")
     p.set_defaults(func=_parse)
 
