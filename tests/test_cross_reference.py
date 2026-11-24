@@ -220,11 +220,17 @@ def test_a_part_that_letters_the_section_differently_confirms_the_score_feature_
     assert not any("does not carry" in w or "ignored" in w for w in report.warnings)
 
 
-def test_a_part_solo_that_agrees_with_a_section_is_not_swallowed_by_a_feature_of_the_section_before(tmp_path):
+def test_a_part_solo_matched_across_a_section_boundary_is_warned_about(tmp_path):
     report = clarinet(tmp_path, "b_at_18", CLARINET_ONE)  # B starts at bar 17; the score's Clarinet solo is at A, bar 15
 
-    assert [(f.rehearsal_mark, f.instrument, f.bar) for f in report.features] == [("A", "Clarinet", 15), ("B", "Clarinet", 18)]
-    assert "the score marks a Clarinet solo (mark A, bar 15) that the Clarinet part does not carry" in report.warnings
+    assert [(f.rehearsal_mark, f.instrument, f.bar) for f in report.features] == [("A", "Clarinet", 15)]
+    assert any("matched to the score's Clarinet solo (mark A, bar 15) across a section boundary" in w for w in report.warnings)
+
+
+def test_a_part_solo_matched_in_its_own_section_is_not_warned_about(tmp_path):
+    report = clarinet(tmp_path, "a15_b20", CLARINET_TWO)
+
+    assert report.warnings == []
 
 
 def test_a_claim_prefers_the_feature_in_its_own_section_over_the_closest_bar(tmp_path):
@@ -433,10 +439,14 @@ def test_a_score_feature_of_another_wording_still_blocks_a_conflicting_addition(
     assert any("the score marks the Clarinet solo (mark B, bar 20) there, not Piano" in w for w in report.warnings)
 
 
-def test_a_solo_a_bar_before_its_section_is_placed_at_the_sections_first_bar_in_score_order(tmp_path):
-    report = clarinet(tmp_path, "b_at_13", CLARINET_ONE)  # the part reads B at bar 13; B starts at 17, after the solo at A, bar 15
+VOCAL = FIXTURES / "finale_cross_reference_vocal.pdf"  # a vocal lead at A, bar 15; B starts at bar 17
+VOCAL_TUNE = "Synthetic Vocal Cross Tune"
 
-    assert [(f.rehearsal_mark, f.bar) for f in report.features] == [("A", 15), ("B", 17)]
+
+def test_a_solo_a_bar_before_its_section_is_placed_at_the_sections_first_bar_in_score_order(tmp_path):
+    report = parse_with(tmp_path, {"trombone-1/Trombone1": "b_at_13"}, VOCAL, VOCAL_TUNE)  # the part reads B at bar 13
+
+    assert [(f.kind, f.rehearsal_mark, f.bar) for f in report.features] == [("vocal lead", "A", 15), ("solo", "B", 17)]
     assert [s.mark for s in report.flow] == ["A", "B"]  # one run per section: no Section A, B, A
     assert any("reads bar 13" in r for r in report.features[1].reasons)
 

@@ -1212,6 +1212,20 @@ def cross_reference_clarinet_score(music_font: Path, out: Path, second: str | No
     doc.save(out)
 
 
+def cross_reference_vocal_score(music_font: Path, out: Path) -> None:
+    """Mark A at bar 1 with a female vocal lead at bar 15, and mark B at bar 17."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Vocal Cross Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, VOCAL_LABELS, music_font, [
+        (150, 120, "1", 7), (300, 120, "15", 7), (200, 105, "A", 12),
+        (300, ys_at(150, 5) - 18, "Female Lead Verse 1", 9),
+        (300, ys_at(150, 5) - 12, "solo", 9),
+    ])
+    _system(p1, 460, VOCAL_LABELS, music_font, [(150, 430, "17", 7), (200, 415, "B", 12)])
+    doc.save(out)
+
+
 def cross_reference_unnumbered_mark_score(music_font: Path, out: Path) -> None:
     """Mark A at bar 1 with an open "(SOLOS)" at bar 1; mark B on a system that prints
     no bar numbers (about bar 17); then bar 33 with mark C."""
@@ -1399,6 +1413,7 @@ def main() -> None:
             font, OUT / "finale_cross_reference_clarinet_feature.pdf", "CLARINET FEATURE", "CLARINET FEATURE"
         )
         cross_reference_unnumbered_mark_score(font, OUT / "finale_cross_reference_unnumbered_mark.pdf")
+        cross_reference_vocal_score(font, OUT / "finale_cross_reference_vocal.pdf")
         for name, staves in XREF_PARTS.items():
             cross_reference_part(glyphs, OUT / f"part_xref_{name}.pdf", staves)
     for dpi in (300, 90):

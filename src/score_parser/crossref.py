@@ -10,7 +10,9 @@ mark and bar point to. In two passes, the claim's own section first:
    the soloist of an open feature, or is another soloist of a shared feature;
 2. a solo that found nothing there may match under another mark, within a bar
    window (a part may letter a section differently), but never a feature the same
-   part already carries from its own section: that is another solo.
+   part already carries from its own section: that is another solo. When the
+   solo agrees with a section of the score, a match into another section is a
+   warning.
 
 What is left is added as a feature found only in a part when the part's mark is
 printed in the score and its bar lies in that mark's range; the solos are
@@ -273,7 +275,7 @@ class _CrossReference:
 
         confirming = [f for f in cands if self.names(f, c) and self.reach(f, c, bars(NAMED_WINDOW))]
         if confirming:
-            self.hit(self.confirm, _nearest(confirming, c.bar), c)
+            self.hit(self.confirm, _nearest(confirming, c.bar), c, across_marks)
             return True
         if c.untrusted or not self.plausible(c):
             return False
@@ -282,18 +284,25 @@ class _CrossReference:
         else:
             opened = [f for f in cands if self.is_open(f) and self.reach(f, c, bars(OPEN_WINDOW))]
         if opened:
-            self.hit(self.join, _nearest(opened, c.bar), c)
+            self.hit(self.join, _nearest(opened, c.bar), c, across_marks)
             return True
         shared = [f for f in cands if self.is_shared(f) and self.reach(f, c, bars(OPEN_WINDOW))]
         if shared:
-            self.hit(self.take, _nearest(shared, c.bar), c)
+            self.hit(self.take, _nearest(shared, c.bar), c, across_marks)
             return True
         return False
 
-    def hit(self, action, f: Feature, c: Claim) -> None:
-        """Apply what a match does, and note that the claim's part carries the feature."""
+    def hit(self, action, f: Feature, c: Claim, across_marks: bool) -> None:
+        """Apply what a match does, and note that the claim's part carries the feature.
+        A match from a section of the score into a feature of another is a warning."""
         action(f, c)
         self.carried.setdefault(id(f), set()).add(c.index)
+        if across_marks and c.section is not None:
+            who = " and ".join(_label(p) for p in self.who(f)) or "open"
+            self.warnings.append(
+                f"part {c.part.file}: its solo ({c.where}) was matched to the score's {who} solo "
+                f"({_where(f)}) across a section boundary: check that it is the same solo"
+            )
 
     def unmatched(self, c: Claim) -> str | None:
         """Why a claim that found no score feature cannot be added, or None when it can."""
@@ -417,9 +426,7 @@ class _CrossReference:
     def run(self) -> None:
         claims = self.claims()
         left = [c for c in claims if not self.match(c, across_marks=False)]
-        # Only a solo whose mark and bar the score cannot place may match under another mark: one that agrees
-        # with a section of the score is a solo of that section, to be added or warned about.
-        left = [c for c in left if c.section is not None or not self.match(c, across_marks=True)]
+        left = [c for c in left if not self.match(c, across_marks=True)]
         pending = []
         for c in left:
             reason = self.unmatched(c)

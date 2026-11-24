@@ -151,26 +151,26 @@ class ScoreMap:
     def containing(self, text: str, bar: int | None, slack: int = 0) -> ScoreMark | None:
         """The printing of `text` whose range holds `bar`, else the one that
         starts at most `slack` bars after it (a bar count may be a little off at
-        a range's start). With no bar: the printing, when the letter is printed
-        once; None when it is reused (the part does not say which) or unprinted."""
+        a range's start). Printings with no bar are not ranges. With no bar: the
+        printing, when the letter is printed once; None when it is reused (the
+        part does not say which) or unprinted."""
         sections = self.sections(text)
         if bar is None:
             return sections[0] if len(sections) == 1 else None
-        strict = next(
-            (m for m in sections if (m.bar is None or m.bar <= bar) and (m.end is None or bar < m.end)), None
-        )
+        known = [m for m in sections if m.bar is not None]
+        strict = next((m for m in known if m.bar <= bar and (m.end is None or bar < m.end)), None)
         if strict is not None:
             return strict
-        return next((m for m in sections if m.bar is not None and 0 < m.bar - bar <= slack), None)
+        return next((m for m in known if 0 < m.bar - bar <= slack), None)
 
     def in_force(self, text: str, bar: int | None) -> ScoreMark | None:
-        """The printing of `text` in force at `bar`: the latest that starts at or
-        before it (the first when the bar is unknown). For a score feature, whose
+        """The printing of `text` in force at `bar`: the latest with a known bar
+        that starts at or before it (else the first). For a score feature, whose
         own bar is only as good as the bar count."""
         sections = self.sections(text)
         if bar is None:
             return sections[0] if sections else None
-        started = [m for m in sections if m.bar is None or m.bar <= bar]
+        started = [m for m in sections if m.bar is not None and m.bar <= bar]
         return started[-1] if started else (sections[0] if sections else None)
 
     def page_of(self, bar: int, default: int) -> int:
