@@ -11,7 +11,7 @@ from typing import Literal, NamedTuple
 
 from .layout import count_chords, is_chord_symbol, running_headers, strip_chord_run
 from .instruments import Roster, resolve, resolve_against_first_system
-from .models import Feature, FeatureKind, Location, Page, Participant, ScoreMark, Voice
+from .models import Feature, FeatureKind, Location, Page, Participant, ScoreMap, ScoreMark, Voice
 from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
 from .systems import Phrase, System, find_systems
 from .handover import sole_leads
@@ -746,22 +746,29 @@ def find_features(
 
 def find_features_and_marks(
     pages: list[Page], roster: Roster
-) -> tuple[list[Feature], list[str], list[ScoreMark]]:
-    """`find_features` plus the score's rehearsal marks in reading order."""
+) -> tuple[list[Feature], list[str], ScoreMap]:
+    """`find_features` plus the score's sections and pages, for cross-referencing parts."""
     headers = running_headers(pages)
     systems = [s for page in pages for s in find_systems(page, headers)]
     features, warnings = features_in(systems, roster)
-    return features, warnings, marks_in(systems)
+    return features, warnings, map_of(systems)
 
 
-def marks_in(systems: list[System]) -> list[ScoreMark]:
-    """Each rehearsal mark at its first printing, in reading order, with its
-    bar. Call after `features_in`, which counts the bars."""
-    marks: dict[str, ScoreMark] = {}
-    for system in systems:
-        for x, text in system.marks:
-            marks.setdefault(text, ScoreMark(text, system.page, system.bar_at(x).bar))
-    return list(marks.values())
+def map_of(systems: list[System]) -> ScoreMap:
+    """Every printing of a rehearsal mark, in reading order, with its bar and the
+    bar the next printing starts at, and each numbered system's first bar. Call
+    after `features_in`, which counts the bars."""
+    marks = [
+        ScoreMark(text, system.page, system.bar_at(x).bar)
+        for system in systems
+        for x, text in system.marks
+    ]
+    for i, mark in enumerate(marks):
+        mark.end = next(
+            (m.bar for m in marks[i + 1 :] if m.bar is not None and (mark.bar is None or m.bar > mark.bar)), None
+        )
+    starts = [(system.page, system.bars[0][1]) for system in systems if system.bars]
+    return ScoreMap(marks, starts)
 
 
 def features_in(systems: list[System], roster: Roster) -> tuple[list[Feature], list[str]]:

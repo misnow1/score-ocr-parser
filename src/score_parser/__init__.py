@@ -32,12 +32,12 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
     if not instrumentation.entries:
         warnings.append("no instrumentation found: the first system's labels could not be read")
     title, title_source = score_title(path, pages)
-    features, feature_warnings, marks = find_features_and_marks(pages, instrumentation.roster)
+    features, feature_warnings, score_map = find_features_and_marks(pages, instrumentation.roster)
     warnings += feature_warnings
     parts = find_parts(Path(options.parts_dir), title, options) if options.parts_dir else None
     if parts is not None:
         warnings += parts_warnings(parts)
-        features, cross_warnings = cross_reference(features, parts, marks, instrumentation.entries)
+        features, cross_warnings = cross_reference(features, parts, score_map, instrumentation.entries)
         warnings += cross_warnings
     slug = match_slug(title, Path(options.numbers_dir)) if options.numbers_dir else None
     name, unmatched = draft_name(title, slug, options.numbers_dir)

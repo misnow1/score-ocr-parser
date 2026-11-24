@@ -124,12 +124,52 @@ class Feature:
 
 @dataclass
 class ScoreMark:
-    """A rehearsal mark at its first printing in the score: where cross-referencing
-    finds the section a part solo belongs to. Internal; not part of the report."""
+    """One printing of a rehearsal mark: a section runs from here to the next
+    printing of any mark (`end`, a bar; None for the last or when unknown)."""
 
     text: str
     page: int
     bar: int | None
+    end: int | None = None
+
+
+@dataclass
+class ScoreMap:
+    """Where the score's sections and pages are, for cross-referencing a part
+    solo into the right section and page (ADR 0003). Internal; not in the report.
+    `marks` has every printing (a letter may be reused); `starts` is each
+    system's (page, first printed bar)."""
+
+    marks: list[ScoreMark] = field(default_factory=list)
+    starts: list[tuple[int, int]] = field(default_factory=list)
+
+    def sections(self, text: str) -> list[ScoreMark]:
+        return [m for m in self.marks if m.text == text]
+
+    def containing(self, text: str, bar: int | None) -> ScoreMark | None:
+        """The printing of `text` whose range holds `bar` (the first when the
+        bar is unknown); None when the mark is not printed or the bar is outside."""
+        sections = self.sections(text)
+        if bar is None:
+            return sections[0] if sections else None
+        return next(
+            (m for m in sections if (m.bar is None or m.bar <= bar) and (m.end is None or bar < m.end)), None
+        )
+
+    def in_force(self, text: str, bar: int | None) -> ScoreMark | None:
+        """The printing of `text` in force at `bar`: the latest that starts at or
+        before it (the first when the bar is unknown). For a score feature, whose
+        own bar is only as good as the bar count."""
+        sections = self.sections(text)
+        if bar is None:
+            return sections[0] if sections else None
+        started = [m for m in sections if m.bar is None or m.bar <= bar]
+        return started[-1] if started else (sections[0] if sections else None)
+
+    def page_of(self, bar: int, default: int) -> int:
+        """The page of the last system that starts at or before `bar`."""
+        started = [page for page, first in self.starts if first <= bar]
+        return started[-1] if started else default
 
 
 @dataclass
