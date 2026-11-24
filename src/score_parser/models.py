@@ -123,6 +123,63 @@ class Feature:
 
 
 @dataclass
+class ScoreMark:
+    """One printing of a rehearsal mark: a section runs from here to the next
+    printing of any mark (`end`, a bar; None when unknown). `bar` is the bar it
+    prints at, estimated between the numbered systems around it when its own
+    system prints no bar numbers."""
+
+    text: str
+    page: int
+    bar: int | None
+    end: int | None = None
+
+
+@dataclass
+class ScoreMap:
+    """Where the score's sections and pages are, for cross-referencing a part
+    solo into the right section and page (ADR 0003). Internal; not in the report.
+    `marks` has every printing (a letter may be reused); `starts` is each
+    system's (page, first printed bar)."""
+
+    marks: list[ScoreMark] = field(default_factory=list)
+    starts: list[tuple[int, int]] = field(default_factory=list)
+
+    def sections(self, text: str) -> list[ScoreMark]:
+        return [m for m in self.marks if m.text == text]
+
+    def containing(self, text: str, bar: int | None, slack: int = 0) -> ScoreMark | None:
+        """The printing of `text` whose range holds `bar`, else the one that
+        starts at most `slack` bars after it (a bar count may be a little off at
+        a range's start). Printings with no bar are not ranges. With no bar: the
+        printing, when the letter is printed once; None when it is reused (the
+        part does not say which) or unprinted."""
+        sections = self.sections(text)
+        if bar is None:
+            return sections[0] if len(sections) == 1 else None
+        known = [m for m in sections if m.bar is not None]
+        strict = next((m for m in known if m.bar <= bar and (m.end is None or bar < m.end)), None)
+        if strict is not None:
+            return strict
+        return next((m for m in known if 0 < m.bar - bar <= slack), None)
+
+    def in_force(self, text: str, bar: int | None) -> ScoreMark | None:
+        """The printing of `text` in force at `bar`: the latest with a known bar
+        that starts at or before it (else the first). For a score feature, whose
+        own bar is only as good as the bar count."""
+        sections = self.sections(text)
+        if bar is None:
+            return sections[0] if sections else None
+        started = [m for m in sections if m.bar is not None and m.bar <= bar]
+        return started[-1] if started else (sections[0] if sections else None)
+
+    def page_of(self, bar: int, default: int) -> int:
+        """The page of the last system that starts at or before `bar`."""
+        started = [page for page, first in self.starts if first <= bar]
+        return started[-1] if started else default
+
+
+@dataclass
 class FlowStep:
     """One draft `flow:` step in the planner's shape (never kind or position)."""
 

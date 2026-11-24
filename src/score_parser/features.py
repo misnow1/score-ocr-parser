@@ -11,7 +11,7 @@ from typing import Literal, NamedTuple
 
 from .layout import count_chords, is_chord_symbol, running_headers, strip_chord_run
 from .instruments import Roster, resolve, resolve_against_first_system
-from .models import Feature, FeatureKind, Location, Page, Participant, Voice
+from .models import Feature, FeatureKind, Location, Page, Participant, ScoreMap, ScoreMark, Voice
 from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
 from .systems import Phrase, System, find_systems
 from .handover import sole_leads
@@ -735,16 +735,44 @@ def build_feature(group: list[Candidate], others: list[list[Candidate]] | None =
     )
 
 
-def find_features(
+def find_features_and_marks(
     pages: list[Page], roster: Roster
-) -> tuple[list[Feature], list[str]]:
-    """(features, warnings). Instruments come only from the score's
-    instrumentation (`roster`: first system, variants, recurring instruments);
-    a solo's own text may also name a missing instrument (a possible feature)."""
+) -> tuple[list[Feature], list[str], ScoreMap]:
+    """(features, warnings, the score's sections and pages): the sections and pages are what
+    cross-referencing a part needs to place a solo."""
     headers = running_headers(pages)
-    return features_in(
-        [s for page in pages for s in find_systems(page, headers)], roster
-    )
+    systems = [s for page in pages for s in find_systems(page, headers)]
+    features, warnings = features_in(systems, roster)
+    return features, warnings, map_of(systems)
+
+
+def map_of(systems: list[System]) -> ScoreMap:
+    """Every printing of a rehearsal mark, in reading order, with its bar and the
+    bar the next printing starts at, and each numbered system's first bar. A mark
+    on a system that prints no bar numbers gets a bar estimated between the
+    numbered systems around it, so the range before it still ends there. Call
+    after `features_in`, which counts the bars."""
+    numbered = [(i, system.bars[0][1]) for i, system in enumerate(systems) if system.bars]
+
+    def estimate(i: int) -> int | None:
+        before = [n for n in numbered if n[0] < i]
+        after = [n for n in numbered if n[0] > i]
+        if not (before and after):
+            return None
+        (i0, b0), (i1, b1) = before[-1], after[0]
+        return round(b0 + (b1 - b0) * (i - i0) / (i1 - i0))
+
+    marks = []
+    for i, system in enumerate(systems):
+        for x, text in system.marks:
+            bar = system.bar_at(x).bar
+            marks.append(ScoreMark(text, system.page, bar if bar is not None else estimate(i)))
+    for i, mark in enumerate(marks):
+        mark.end = next(
+            (m.bar for m in marks[i + 1 :] if m.bar is not None and (mark.bar is None or m.bar > mark.bar)), None
+        )
+    starts = [(system.page, system.bars[0][1]) for system in systems if system.bars]
+    return ScoreMap(marks, starts)
 
 
 def features_in(systems: list[System], roster: Roster) -> tuple[list[Feature], list[str]]:

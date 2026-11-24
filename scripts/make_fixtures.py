@@ -1135,6 +1135,173 @@ def rests_above_part(glyph_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+XREF_LABELS = ["Alto Saxophone 1", "Clarinet in Bb", "Trumpet in Bb 1-4", "Trombone 1-4", "Piano", "Drums"]
+
+
+def cross_reference_score(music_font: Path, out: Path) -> None:
+    """A score to cross-reference parts into. Page 1: mark A at bar 1 with an
+    open "(SOLOS)" printed over every staff at bar 9, then mark B at bar 17 with
+    a "TBN SOLO" over the Trombone staff (read as bar 17). Page 2: mark C at bar 33 with
+    no marking at all."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Cross Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, XREF_LABELS, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7), (200, 105, "A", 12),
+        *[(300, ys_at(150, i) - 12, "(SOLOS)", 9) for i in range(6)],
+    ])
+    _system(p1, 400, XREF_LABELS, music_font, [
+        (150, 370, "17", 7), (200, 355, "B", 12),
+        (350, ys_at(400, 3) - 12, "TBN SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, XREF_LABELS, music_font, [(150, 120, "33", 7), (200, 105, "C", 12)])
+    doc.save(out)
+
+
+def cross_reference_shared_score(music_font: Path, out: Path) -> None:
+    """Mark A at bar 1 with a bare "SOLO" at bar 9 over the Clarinet, Trumpet and
+    Trombone staves only: one feature shared by those three instruments."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Shared Cross Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, XREF_LABELS, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7), (200, 105, "A", 12),
+        *[(300, ys_at(150, i) - 12, "SOLO", 9) for i in (1, 2, 3)],
+    ])
+    doc.save(out)
+
+
+def cross_reference_reused_score(music_font: Path, out: Path, second_open: bool = True) -> None:
+    """Mark A is printed twice. Page 1: A at bar 1 with an open "(SOLOS)" at bar 9,
+    B at bar 17. Page 2: bar 25 (B goes on, no mark), then A again at bar 33 with an
+    open "(SOLOS)" at bar 41."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Reuse Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, XREF_LABELS, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7), (200, 105, "A", 12),
+        *[(300, ys_at(150, i) - 12, "(SOLOS)", 9) for i in range(6)],
+    ])
+    _system(p1, 400, XREF_LABELS, music_font, [(150, 370, "17", 7), (200, 355, "B", 12)])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, XREF_LABELS, music_font, [(150, 120, "25", 7)])
+    _system(p2, 400, XREF_LABELS, music_font, [
+        (150, 370, "33", 7), (300, 370, "41", 7), (200, 355, "A", 12),
+        *[(300, ys_at(400, i) - 12, "(SOLOS)", 9) for i in range(6) if second_open],
+    ])
+    doc.save(out)
+
+
+def cross_reference_clarinet_score(music_font: Path, out: Path, second: str | None, first: str = "CLARINET SOLO") -> None:
+    """Mark A at bar 1 with a "CLARINET SOLO" at bar 15; mark B at bar 17; and, on
+    page 2 (bar 20, still B), the `second` wording over the Clarinet staff, if any."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Clarinet Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, XREF_LABELS, music_font, [
+        (150, 120, "1", 7), (300, 120, "15", 7), (200, 105, "A", 12),
+        (300, ys_at(150, 1) - 12, first, 9),
+    ])
+    _system(p1, 400, XREF_LABELS, music_font, [(150, 370, "17", 7), (200, 355, "B", 12)])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, XREF_LABELS, music_font, [
+        (150, 120, "20", 7),
+        *([(300, ys_at(150, 1) - 12, second, 9)] if second else []),
+    ])
+    doc.save(out)
+
+
+def cross_reference_vocal_score(music_font: Path, out: Path) -> None:
+    """Mark A at bar 1 with a female vocal lead at bar 15, and mark B at bar 17."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Vocal Cross Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, VOCAL_LABELS, music_font, [
+        (150, 120, "1", 7), (300, 120, "15", 7), (200, 105, "A", 12),
+        (300, ys_at(150, 5) - 18, "Female Lead Verse 1", 9),
+        (300, ys_at(150, 5) - 12, "solo", 9),
+    ])
+    _system(p1, 460, VOCAL_LABELS, music_font, [(150, 430, "17", 7), (200, 415, "B", 12)])
+    doc.save(out)
+
+
+def cross_reference_unnumbered_mark_score(music_font: Path, out: Path) -> None:
+    """Mark A at bar 1 with an open "(SOLOS)" at bar 1; mark B on a system that prints
+    no bar numbers (about bar 17); then bar 33 with mark C."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Unnumbered Mark Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, XREF_LABELS, music_font, [
+        (150, 120, "1", 7), (200, 105, "A", 12),
+        *[(300, ys_at(150, i) - 12, "(SOLOS)", 9) for i in range(6)],
+    ])
+    _system(p1, 400, XREF_LABELS, music_font, [(200, 355, "B", 12)])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, XREF_LABELS, music_font, [(150, 120, "33", 7), (200, 105, "C", 12)])
+    doc.save(out)
+
+
+# (page, first bar, mark, solo interval, wording) per staff; see cross_reference_part.
+XREF_PARTS = {
+    "a_and_c": [(1, 6, "A", 3, "SOLO"), (2, 33, "C", 1, "SOLO")],  # solos at bars 9 (A) and 34 (C)
+    "a": [(1, 6, "A", 3, "SOLO")],
+    "none": [(1, 6, "A", None, ""), (2, 33, "C", None, "")],
+    "noisy": [  # the same solo read twice, one more at C, and one at a mark the score lacks
+        (1, 6, "A", 3, "SOLO"), (1, 6, "A", 3, "SOLO"), (2, 33, "C", 1, "SOLO"), (2, 38, "Z", 2, "SOLO")
+    ],
+    "cue_tbn": [(1, 17, "B", 1, "TBN SOLO")],
+    "unmarked": [(1, 6, None, 3, "SOLO")],  # a solo at bar 9 under no rehearsal mark
+    "many": [  # seven distinct solos: far more than a real part has
+        (1, 6, "A", 3, "SOLO"), (1, 11, "A", 1, "SOLO"), (1, 16, "A", 1, "SOLO"), (1, 21, "A", 1, "SOLO"),
+        (2, 33, "C", 1, "SOLO"), (2, 38, "C", 1, "SOLO"), (2, 43, "C", 1, "SOLO"),
+    ],
+    "c": [(2, 33, "C", 1, "SOLO")],  # a solo at bar 34 (C) only
+    "a_at_16": [(1, 12, "A", 4, "SOLO")],  # the section the score calls B, lettered A: bar 16
+    "a_at_40": [(1, 36, "A", 4, "SOLO")],  # mark A, but bar 40: outside A's bars in the score
+    "a_at_41": [(2, 38, "A", 3, "SOLO")],  # mark A at bar 41
+    "b_at_28": [(1, 24, "B", 4, "SOLO")],  # mark B at bar 28
+    "barless": [(1, None, "C", 1, "SOLO")],  # a solo at C whose bar cannot be known
+    "b_at_16": [(1, 12, "B", 4, "SOLO")],  # lettered B, bar 16
+    "b_at_18": [(1, 14, "B", 4, "SOLO")],  # mark B, bar 18
+    "a15_b20": [(1, 11, "A", 4, "SOLO"), (1, 16, "B", 4, "SOLO")],  # solos at bars 15 (A) and 20 (B)
+    "a_at_20": [(1, 16, "A", 4, "SOLO")],  # mark A at bar 20
+    "barless_a": [(1, None, "A", 1, "SOLO")],  # a solo at A whose bar cannot be known
+    "c32": [(2, 31, "C", 1, "SOLO")],  # mark C at bar 32, a bar before the score's C
+    "c33": [(2, 32, "C", 1, "SOLO")],
+    "c36": [(2, 32, "C", 4, "SOLO")],
+    "c38": [(2, 34, "C", 4, "SOLO")],
+    "d_at_16": [(1, 12, "D", 4, "SOLO")],  # a mark the score does not print, bar 16
+    "b_at_13": [(1, 9, "B", 4, "SOLO")],  # mark B, bar 13: before B's first bar in the score
+    "a_at_36": [(2, 33, "A", 3, "SOLO")],  # mark A at bar 36
+    "a_far": [(1, 1, "A", 1, "SOLO")],  # mark A, but bar 2: another solo than the open one at bar 9
+    "b_at_17": [(1, 17, "B", 0, "SOLO")],  # a solo at bar 17 (B), where the score marks the trombone
+}
+
+
+def cross_reference_part(glyph_font: Path, out: Path, staves) -> None:
+    """A one-instrument part for cross-referencing. `staves` are (page, first
+    bar, mark or None, solo interval or None, solo wording): one staff each,
+    five bars wide, its first bar number printed (a first bar of None draws no
+    barlines and prints no number, so its bars cannot be known), a solo wording in the given
+    interval (bar = first bar + interval)."""
+    doc = pymupdf.open()
+    pages: dict[int, list] = {}
+    for page, first, mark, interval, wording in staves:
+        pages.setdefault(page, []).append((first, mark, interval, wording))
+    for number in sorted(pages):
+        page = doc.new_page(width=612, height=792)
+        for row, (first, mark, interval, wording) in enumerate(pages[number]):
+            top = PART_STAFF_TOP + 150 * row
+            texts = [(50, top - 11, str(first), 7)] if first is not None else []
+            if mark:
+                texts.append((200, top - 18, mark, 12))
+            if interval is not None:
+                texts.append((PART_BARLINES[interval] + 20, top - 8, wording, 9))
+            _part_system(page, top, glyph_font, texts, barlines=PART_BARLINES if first is not None else ())
+    doc.save(out)
+
+
 def one_line_part(out: Path) -> None:
     """A percussion part: one-line staves with short barlines, and a long rule
     under the title that is no staff. Mark A on the first staff; the second
@@ -1236,6 +1403,19 @@ def main() -> None:
         repeated_number_part(glyphs, OUT / "part_repeated_number.pdf")
         joined_staves_part(glyphs, OUT / "part_joined_staves.pdf")
         rests_above_part(glyphs, OUT / "part_rests_above.pdf")
+        cross_reference_score(font, OUT / "finale_cross_reference.pdf")
+        cross_reference_shared_score(font, OUT / "finale_cross_reference_shared.pdf")
+        cross_reference_reused_score(font, OUT / "finale_cross_reference_reused.pdf")
+        cross_reference_reused_score(font, OUT / "finale_cross_reference_reused_first.pdf", second_open=False)
+        cross_reference_clarinet_score(font, OUT / "finale_cross_reference_clarinet_two.pdf", "CLARINET SOLO")
+        cross_reference_clarinet_score(font, OUT / "finale_cross_reference_clarinet_one.pdf", None)
+        cross_reference_clarinet_score(
+            font, OUT / "finale_cross_reference_clarinet_feature.pdf", "CLARINET FEATURE", "CLARINET FEATURE"
+        )
+        cross_reference_unnumbered_mark_score(font, OUT / "finale_cross_reference_unnumbered_mark.pdf")
+        cross_reference_vocal_score(font, OUT / "finale_cross_reference_vocal.pdf")
+        for name, staves in XREF_PARTS.items():
+            cross_reference_part(glyphs, OUT / f"part_xref_{name}.pdf", staves)
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     scanned(OUT / "label_repair_ocr_misreads.pdf", OUT / "scan_label_misreads.pdf", 300)
