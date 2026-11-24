@@ -735,20 +735,11 @@ def build_feature(group: list[Candidate], others: list[list[Candidate]] | None =
     )
 
 
-def find_features(
-    pages: list[Page], roster: Roster
-) -> tuple[list[Feature], list[str]]:
-    """(features, warnings). Instruments come only from the score's
-    instrumentation (`roster`: first system, variants, recurring instruments);
-    a solo's own text may also name a missing instrument (a possible feature)."""
-    features, warnings, _ = find_features_and_marks(pages, roster)
-    return features, warnings
-
-
 def find_features_and_marks(
     pages: list[Page], roster: Roster
 ) -> tuple[list[Feature], list[str], ScoreMap]:
-    """`find_features` plus the score's sections and pages, for cross-referencing parts."""
+    """(features, warnings, the score's sections and pages): the sections and pages are what
+    cross-referencing a part needs to place a solo."""
     headers = running_headers(pages)
     systems = [s for page in pages for s in find_systems(page, headers)]
     features, warnings = features_in(systems, roster)

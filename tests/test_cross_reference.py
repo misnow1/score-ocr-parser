@@ -214,10 +214,17 @@ def clarinet(tmp_path, fixture, score):
 
 
 def test_a_part_that_letters_the_section_differently_confirms_the_score_feature_nearby(tmp_path):
-    report = clarinet(tmp_path, "b_at_16", CLARINET_ONE)  # the part says B, bar 16; the score has A, bar 15
+    report = clarinet(tmp_path, "d_at_16", CLARINET_ONE)  # the part marks D, which the score does not print; the score has A, bar 15
 
     assert [(f.rehearsal_mark, f.instrument, f.bar) for f in report.features] == [("A", "Clarinet", 15)]
     assert not any("does not carry" in w or "ignored" in w for w in report.warnings)
+
+
+def test_a_part_solo_that_agrees_with_a_section_is_not_swallowed_by_a_feature_of_the_section_before(tmp_path):
+    report = clarinet(tmp_path, "b_at_18", CLARINET_ONE)  # B starts at bar 17; the score's Clarinet solo is at A, bar 15
+
+    assert [(f.rehearsal_mark, f.instrument, f.bar) for f in report.features] == [("A", "Clarinet", 15), ("B", "Clarinet", 18)]
+    assert "the score marks a Clarinet solo (mark A, bar 15) that the Clarinet part does not carry" in report.warnings
 
 
 def test_a_claim_prefers_the_feature_in_its_own_section_over_the_closest_bar(tmp_path):
@@ -252,9 +259,9 @@ def test_the_warning_for_another_instruments_solo_names_the_nearest_feature(tmp_
 
 
 def test_a_part_solo_one_bar_before_its_marks_first_bar_is_still_that_section(tmp_path):
-    report = parse_with(tmp_path, {"alto-sax-1/Clarinet": "c32"})  # the score prints C at bar 33
+    report = parse_with(tmp_path, {"alto-sax-1/Clarinet": "c32"})  # the part reads bar 32; the score prints C at bar 33
 
-    assert [(f.rehearsal_mark, f.instrument, f.bar) for f in at(report, "C")] == [("C", "Clarinet", 32)]
+    assert [(f.rehearsal_mark, f.instrument, f.bar) for f in at(report, "C")] == [("C", "Clarinet", 33)]  # placed at the mark
 
 
 def test_a_part_solo_outside_its_marks_bar_range_is_not_added(tmp_path):
@@ -404,3 +411,58 @@ def test_a_part_solo_with_no_bar_at_a_reused_letter_is_not_guessed(tmp_path):
         (2, 41, "A", None),
     ]
     assert any("ignored 1 solo (mark A): no bar to place it by" in w for w in report.warnings)
+
+
+CLARINET_FEATURE = FIXTURES / "finale_cross_reference_clarinet_feature.pdf"  # "CLARINET FEATURE" at A, bar 15 and B, bar 20
+
+
+def test_a_part_solo_matches_a_score_feature_whatever_the_wording(tmp_path):
+    report = clarinet(tmp_path, "a15_b20", CLARINET_FEATURE)
+
+    assert [(f.kind, f.rehearsal_mark, f.instrument, f.bar) for f in report.features] == [
+        ("feature", "A", "Clarinet", 15),
+        ("feature", "B", "Clarinet", 20),
+    ]
+    assert report.warnings == []
+
+
+def test_a_score_feature_of_another_wording_still_blocks_a_conflicting_addition(tmp_path):
+    report = parse_with(tmp_path, {"piano/Piano": "b_at_18"}, CLARINET_FEATURE, CLARINET_TUNE)
+
+    assert [f.instrument for f in report.features] == ["Clarinet", "Clarinet"]
+    assert any("the score marks the Clarinet solo (mark B, bar 20) there, not Piano" in w for w in report.warnings)
+
+
+def test_a_solo_a_bar_before_its_section_is_placed_at_the_sections_first_bar_in_score_order(tmp_path):
+    report = clarinet(tmp_path, "b_at_13", CLARINET_ONE)  # the part reads B at bar 13; B starts at 17, after the solo at A, bar 15
+
+    assert [(f.rehearsal_mark, f.bar) for f in report.features] == [("A", 15), ("B", 17)]
+    assert [s.mark for s in report.flow] == ["A", "B"]  # one run per section: no Section A, B, A
+    assert any("reads bar 13" in r for r in report.features[1].reasons)
+
+
+REUSED_FIRST = FIXTURES / "finale_cross_reference_reused_first.pdf"  # the open solo is in the first A only
+
+
+def test_a_band_solo_in_a_reused_sections_second_printing_is_not_folded_into_the_first(tmp_path):
+    report = parse_with(tmp_path, {
+        "trumpet-1/Trpt1": "a_at_36", "trumpet-2/Trpt2": "a_at_36", "trumpet-3/Trpt3": "a_at_36",
+        "piano/Piano": "a_at_36", "drums/Drums": "a_at_36",
+    }, REUSED_FIRST, REUSED_TUNE)
+
+    assert [(f.page, f.bar, f.rehearsal_mark, f.instrument) for f in report.features] == [
+        (1, 9, "A", None),
+        (2, 36, "A", None),  # its own open feature
+    ]
+    assert not any("parts mark a solo here" in r for r in report.features[0].reasons)
+    assert any("5 parts mark it" in r for r in report.features[1].reasons)
+
+
+def test_a_feature_many_parts_carry_has_one_reason_with_a_count(tmp_path):
+    report = parse_with(tmp_path, {
+        "trombone-1/Trombone1": "cue_tbn", "trombone-2/Trombone2": "cue_tbn", "trombone-3/Trombone3": "cue_tbn",
+        "trombone-4/Trombone4": "cue_tbn",
+    })
+
+    [trombone] = at(report, "B")
+    assert [r for r in trombone.reasons if "carried by" in r] == ["carried by the 4 parts"]

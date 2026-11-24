@@ -51,6 +51,7 @@ MAX_NAMED = OPEN_MIN_PARTS - 1  # players (instrument and chair each) a named or
 # A real part has a solo or two; a lyrics-heavy part (vocal score, piano on the
 # vocal lines) reads as dozens, and more than this is noise.
 MAX_PART_SOLOS = 4
+MAX_REASONS = 3  # a feature lists the parts that carry it by name up to this many; more are one reason with a count
 PART_NAMED = 0.3  # evidence: the soloist comes from a part, like a name in the marking's text
 OPEN_NAMED_CAP = round(LOW_CONFIDENCE - 0.05, 2)  # part evidence never lifts an open feature past the flow draft's TODO
 FOUND_IN_PART = 0.7  # confidence of a feature only a part shows (below the flow draft's TODO threshold)
@@ -216,6 +217,7 @@ class _CrossReference:
     extras: dict[int, list[Participant]] = field(default_factory=dict)  # soloists a shared feature took
     chaired: set[int] = field(default_factory=set)  # features whose chair a part filled in
     carried: dict[int, set[int]] = field(default_factory=dict)  # feature -> indices of the parts that carry it
+    proof: dict[int, list[tuple[str, Claim]]] = field(default_factory=dict)  # feature -> (what, claim) for its reasons
     ignored: dict[tuple[int, str], list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
@@ -249,39 +251,49 @@ class _CrossReference:
         return id(f) in self.original and f.instrument is not None and bool(f.shared_with)
 
     # -- matching ----------------------------------------------------------------
-    def reach(self, f: Feature, c: Claim, window: int | None) -> bool:
+    def reach(self, f: Feature, c: Claim, bars: int | None) -> bool:
         """Whether the claim points at the feature: in the claim's own section
-        (window None), or, for a feature of another mark, within `window` bars
-        and not one the same part already carries."""
-        if window is None:
+        (`bars` None), or, for a feature of another mark, within `bars` bars and
+        not one the same part already carries."""
+        if bars is None:
             return (
                 c.section is not None
                 and f.rehearsal_mark == c.mark
                 and self.score.in_force(f.rehearsal_mark, f.bar) is c.section
             )
-        return _within(f, c.bar, window) and c.index not in self.carried.get(id(f), ())
+        return _within(f, c.bar, bars) and c.index not in self.carried.get(id(f), ())
 
-    def match(self, c: Claim, window: bool) -> bool:
-        """Confirm, name or share a score feature; True when the claim found one."""
-        cands = [f for f in self.features if f.kind == c.feature.kind]
-        confirming = [f for f in cands if self.names(f, c) and self.reach(f, c, NAMED_WINDOW if window else None)]
+    def match(self, c: Claim, across_marks: bool) -> bool:
+        """Confirm, name or share a score feature, in the claim's own section or
+        (`across_marks`) near its bar under another mark; True when it found one."""
+        cands = [f for f in self.features if f.kind != "vocal lead"]
+
+        def bars(window: int) -> int | None:
+            return window if across_marks else None
+
+        confirming = [f for f in cands if self.names(f, c) and self.reach(f, c, bars(NAMED_WINDOW))]
         if confirming:
-            self.confirm(_nearest(confirming, c.bar), c)
+            self.hit(self.confirm, _nearest(confirming, c.bar), c)
             return True
         if c.untrusted or not self.plausible(c):
             return False
-        if c.band and not window:
+        if c.band and not across_marks and c.section is None:  # bars the score cannot place: the mark's open solo
             opened = [f for f in cands if self.is_open(f) and f.rehearsal_mark == c.mark]
         else:
-            opened = [f for f in cands if self.is_open(f) and self.reach(f, c, OPEN_WINDOW if window else None)]
+            opened = [f for f in cands if self.is_open(f) and self.reach(f, c, bars(OPEN_WINDOW))]
         if opened:
-            self.join(_nearest(opened, c.bar), c)
+            self.hit(self.join, _nearest(opened, c.bar), c)
             return True
-        shared = [f for f in cands if self.is_shared(f) and self.reach(f, c, OPEN_WINDOW if window else None)]
+        shared = [f for f in cands if self.is_shared(f) and self.reach(f, c, bars(OPEN_WINDOW))]
         if shared:
-            self.take(_nearest(shared, c.bar), c)
+            self.hit(self.take, _nearest(shared, c.bar), c)
             return True
         return False
+
+    def hit(self, action, f: Feature, c: Claim) -> None:
+        """Apply what a match does, and note that the claim's part carries the feature."""
+        action(f, c)
+        self.carried.setdefault(id(f), set()).add(c.index)
 
     def unmatched(self, c: Claim) -> str | None:
         """Why a claim that found no score feature cannot be added, or None when it can."""
@@ -289,7 +301,11 @@ class _CrossReference:
             return c.untrusted
         if not self.plausible(c):
             return f"{c.instrument} is not in the score's instrumentation"
-        cands = [f for f in self.features if f.kind == c.feature.kind and self.base(f) and _within(f, c.bar, NEAR_BARS)]
+        cands = [
+            f for f in self.features
+            if f.kind != "vocal lead" and _within(f, c.bar, NEAR_BARS)
+            and self.base(f) and not any(present_as(c.instrument, [p.instrument]) for p in self.base(f))
+        ]
         if cands:
             f = _nearest(cands, c.bar)
             who = " and ".join(_label(p) for p in self.base(f))
@@ -309,14 +325,10 @@ class _CrossReference:
 
     # -- what a match does ---------------------------------------------------------
     def evidence(self, f: Feature, c: Claim, what: str) -> None:
-        part = f"{c.instrument} part (part page {c.feature.page}" + (f", bar {c.bar})" if c.bar is not None else ")")
-        reason = f"{what} {part}"
-        if reason not in f.reasons:
-            f.reasons.append(reason)
-        self.carried.setdefault(id(f), set()).add(c.index)
+        """Remember that a part's solo supports the feature; `finish` writes the reasons."""
+        self.proof.setdefault(id(f), []).append((what, c))
 
     def confirm(self, f: Feature, c: Claim) -> None:
-        self.carried.setdefault(id(f), set()).add(c.index)
         if id(f) in self.joined:
             return self.join(f, c)
         mine = [p for p in self.base(f) if present_as(c.instrument, [p.instrument])]
@@ -337,12 +349,10 @@ class _CrossReference:
 
     def join(self, f: Feature, c: Claim) -> None:
         """An open feature's soloist, kept until the whole picture is known (finish)."""
-        self.carried.setdefault(id(f), set()).add(c.index)
         self.joined.setdefault(id(f), []).append(c)
 
     def take(self, f: Feature, c: Claim) -> None:
         """A shared feature takes one more soloist, while it has room."""
-        self.carried.setdefault(id(f), set()).add(c.index)
         here = self.who(f)
         if any((p.instrument, p.chair) == c.player for p in here):
             return
@@ -360,7 +370,9 @@ class _CrossReference:
         first = min(group, key=lambda c: (c.bar, self.order.get(c.instrument, 10**6)))
         section = first.section
         players = sorted({c.player for c in group}, key=lambda p: (self.order.get(p[0], 10**6), p[1] or 0))
-        bar = first.bar
+        # A bar a little before the mark's first bar (the slack) is placed at the mark's first bar, so the
+        # feature stays inside its section in score order (ADR 0003).
+        bar = max(first.bar, section.bar) if section.bar is not None else first.bar
         page = self.score.page_of(bar, section.page)
         kind = first.feature.kind
         names = ", ".join(sorted({c.instrument for c in group}, key=lambda n: self.order.get(n, 10**6)))
@@ -373,7 +385,8 @@ class _CrossReference:
             reasons=[
                 f"found only in parts: the score marks no {kind} at mark {first.mark}"
                 + (f"; {len({c.index for c in group})} parts mark it: the band's open solo, no one is named" if band else f" ({names})")
-            ],
+            ]
+            + ([f"the part reads bar {first.bar}, before the mark's first bar: placed at bar {bar}"] if bar != first.bar else []),
             locations=[Location(page, bar)],
             chair=who[0].chair if who else None, chair_ambiguous=who[0].chair_ambiguous if who else False,
             shared_with=who[1:] if who else [],
@@ -403,8 +416,10 @@ class _CrossReference:
 
     def run(self) -> None:
         claims = self.claims()
-        left = [c for c in claims if not self.match(c, window=False)]
-        left = [c for c in left if not self.match(c, window=True)]
+        left = [c for c in claims if not self.match(c, across_marks=False)]
+        # Only a solo whose mark and bar the score cannot place may match under another mark: one that agrees
+        # with a section of the score is a solo of that section, to be added or warned about.
+        left = [c for c in left if c.section is not None or not self.match(c, across_marks=True)]
         pending = []
         for c in left:
             reason = self.unmatched(c)
@@ -428,7 +443,7 @@ class _CrossReference:
                     continue
                 for feature in self.features:
                     if (
-                        id(feature) in self.original and feature.kind == f.kind
+                        id(feature) in self.original and feature.kind != "vocal lead"
                         and any(present_as(f.instrument, [p.instrument]) for p in self.base(feature))
                         and (f.rehearsal_mark == feature.rehearsal_mark or _within(feature, f.bar, NEAR_BARS))
                     ):
@@ -465,11 +480,28 @@ class _CrossReference:
                     self.apply(f, claims)
             if self.extras.get(id(f)):
                 f.shared_with += self.extras[id(f)]
+        for f in self.features:
+            self.write_reasons(f)
         for (index, reason), where in self.ignored.items():
             n = len(where)
             self.warnings.append(
                 f"part {self.parts.parts[index].file}: ignored {n} solo{'s' if n > 1 else ''} ({', '.join(where)}): {reason}"
             )
+
+    def write_reasons(self, f: Feature) -> None:
+        """The parts' evidence as reasons: one line per part, or one line with a
+        count when many parts carry the feature."""
+        by_what: dict[str, list[Claim]] = {}
+        for what, c in self.proof.get(id(f), []):
+            by_what.setdefault(what, []).append(c)
+        for what, claims in by_what.items():
+            parts = {c.index: c for c in claims}.values()
+            if len(parts) > MAX_REASONS:
+                f.reasons.append(f"{what} {len(parts)} parts")
+                continue
+            for c in parts:
+                bar = f", bar {c.bar}" if c.bar is not None else ""
+                f.reasons.append(f"{what} {c.instrument} part (part page {c.feature.page}{bar})")
 
     def apply(self, f: Feature, claims: list[Claim]) -> None:
         who: list[Participant] = []

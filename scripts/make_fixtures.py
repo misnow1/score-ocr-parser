@@ -1172,7 +1172,7 @@ def cross_reference_shared_score(music_font: Path, out: Path) -> None:
     doc.save(out)
 
 
-def cross_reference_reused_score(music_font: Path, out: Path) -> None:
+def cross_reference_reused_score(music_font: Path, out: Path, second_open: bool = True) -> None:
     """Mark A is printed twice. Page 1: A at bar 1 with an open "(SOLOS)" at bar 9,
     B at bar 17. Page 2: bar 25 (B goes on, no mark), then A again at bar 33 with an
     open "(SOLOS)" at bar 41."""
@@ -1188,26 +1188,26 @@ def cross_reference_reused_score(music_font: Path, out: Path) -> None:
     _system(p2, 150, XREF_LABELS, music_font, [(150, 120, "25", 7)])
     _system(p2, 400, XREF_LABELS, music_font, [
         (150, 370, "33", 7), (300, 370, "41", 7), (200, 355, "A", 12),
-        *[(300, ys_at(400, i) - 12, "(SOLOS)", 9) for i in range(6)],
+        *[(300, ys_at(400, i) - 12, "(SOLOS)", 9) for i in range(6) if second_open],
     ])
     doc.save(out)
 
 
-def cross_reference_clarinet_score(music_font: Path, out: Path, second: bool) -> None:
+def cross_reference_clarinet_score(music_font: Path, out: Path, second: str | None, first: str = "CLARINET SOLO") -> None:
     """Mark A at bar 1 with a "CLARINET SOLO" at bar 15; mark B at bar 17; and, on
-    page 2 (bar 20, still B), a "CLARINET SOLO" when `second`."""
+    page 2 (bar 20, still B), the `second` wording over the Clarinet staff, if any."""
     doc = pymupdf.open()
     p1 = doc.new_page(width=612, height=792)
     p1.insert_text((200, 60), "Synthetic Clarinet Tune", fontname="helv", fontsize=24)
     _system(p1, 150, XREF_LABELS, music_font, [
         (150, 120, "1", 7), (300, 120, "15", 7), (200, 105, "A", 12),
-        (300, ys_at(150, 1) - 12, "CLARINET SOLO", 9),
+        (300, ys_at(150, 1) - 12, first, 9),
     ])
     _system(p1, 400, XREF_LABELS, music_font, [(150, 370, "17", 7), (200, 355, "B", 12)])
     p2 = doc.new_page(width=612, height=792)
     _system(p2, 150, XREF_LABELS, music_font, [
         (150, 120, "20", 7),
-        *([(300, ys_at(150, 1) - 12, "CLARINET SOLO", 9)] if second else []),
+        *([(300, ys_at(150, 1) - 12, second, 9)] if second else []),
     ])
     doc.save(out)
 
@@ -1257,6 +1257,9 @@ XREF_PARTS = {
     "c33": [(2, 32, "C", 1, "SOLO")],
     "c36": [(2, 32, "C", 4, "SOLO")],
     "c38": [(2, 34, "C", 4, "SOLO")],
+    "d_at_16": [(1, 12, "D", 4, "SOLO")],  # a mark the score does not print, bar 16
+    "b_at_13": [(1, 9, "B", 4, "SOLO")],  # mark B, bar 13: before B's first bar in the score
+    "a_at_36": [(2, 33, "A", 3, "SOLO")],  # mark A at bar 36
     "a_far": [(1, 1, "A", 1, "SOLO")],  # mark A, but bar 2: another solo than the open one at bar 9
     "b_at_17": [(1, 17, "B", 0, "SOLO")],  # a solo at bar 17 (B), where the score marks the trombone
 }
@@ -1389,8 +1392,12 @@ def main() -> None:
         cross_reference_score(font, OUT / "finale_cross_reference.pdf")
         cross_reference_shared_score(font, OUT / "finale_cross_reference_shared.pdf")
         cross_reference_reused_score(font, OUT / "finale_cross_reference_reused.pdf")
-        cross_reference_clarinet_score(font, OUT / "finale_cross_reference_clarinet_two.pdf", True)
-        cross_reference_clarinet_score(font, OUT / "finale_cross_reference_clarinet_one.pdf", False)
+        cross_reference_reused_score(font, OUT / "finale_cross_reference_reused_first.pdf", second_open=False)
+        cross_reference_clarinet_score(font, OUT / "finale_cross_reference_clarinet_two.pdf", "CLARINET SOLO")
+        cross_reference_clarinet_score(font, OUT / "finale_cross_reference_clarinet_one.pdf", None)
+        cross_reference_clarinet_score(
+            font, OUT / "finale_cross_reference_clarinet_feature.pdf", "CLARINET FEATURE", "CLARINET FEATURE"
+        )
         cross_reference_unnumbered_mark_score(font, OUT / "finale_cross_reference_unnumbered_mark.pdf")
         for name, staves in XREF_PARTS.items():
             cross_reference_part(glyphs, OUT / f"part_xref_{name}.pdf", staves)
