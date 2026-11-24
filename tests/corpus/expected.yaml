@@ -124,7 +124,7 @@ scores:
     # One feature: a violin solo (p5, bar 56).
     max_features: 1
     features:
-      - {instrument: Violin, page: 5, bar: 56, xfail: "reported on p5 as a possible feature but at bar 48, where an 8-measure rest starts; the solo starts at bar 56. In the violin part the bar labels 33, 40 and 48 each start a rest of 7, 8 and 8 bars, and the 56 label is jammed into the 33 label at the staff start; order and section are right"}
+      - {instrument: Violin, page: 5, bar: 56, xfail: "reported on p5 as a possible feature but at bar 48, where an 8-measure rest starts; the solo starts at bar 56. In the violin part the bar labels 33, 40 and 48 each start a rest of 7, 8 and 8 bars, and the 56 label is jammed into the 33 label at the staff start; the solo is improvised (chords above the staves, hash marks inside them, no solo wording); order and section are right"}
 
   "I HEARD THE BELLS ON CHRISTMAS DAY- SCORE.":
     # Seven features: six vocal cues and one clarinet solo. Pages only, apart from the first bar.
