@@ -2,4 +2,11 @@
 # Editable data: add a slug and its other names; matching ignores case and "the".
 aliases:
   first-noel: [First Nowell]
+  do-you-hear: [Do You Hear What I Hear]
+  please-come-home: [Please Come Home For Christmas, Please Come Home For Chrstmas]
   superstition: [Super Christmas, Merry Super Christmas]  # parodies of the same song
+
+# Words that may follow a song's title in a part file name and name no
+# instrument: a description of the file. Matched at the start of what follows
+# the title (an instrument name after the title needs no entry here).
+part_descriptions: [lyrics only, lead sheet, lead vocal, background, backgroud, backing, solo, copy]

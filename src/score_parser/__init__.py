@@ -9,6 +9,7 @@ from .instruments import build_instrumentation, vocabulary_hits
 from .matching import draft_name, match_slug
 from .models import PageInfo, ParseOptions, PartReport, ScoreReport
 from .part import parse_part
+from .parts import find_parts, parts_warnings
 from .staves import unlabeled_staff_warnings
 from .source import read_pages, scan_warnings
 from .title import score_title
@@ -29,6 +30,9 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
     title, title_source = score_title(path, pages)
     features, feature_warnings = find_features(pages, instrumentation.roster)
     warnings += feature_warnings
+    parts = find_parts(Path(options.parts_dir), title, options) if options.parts_dir else None
+    if parts is not None:
+        warnings += parts_warnings(parts)
     slug = match_slug(title, Path(options.numbers_dir)) if options.numbers_dir else None
     name, unmatched = draft_name(title, slug, options.numbers_dir)
     return ScoreReport(
@@ -43,4 +47,5 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
         unknown_labels=instrumentation.unknown_labels,
         pages=[PageInfo.from_page(p) for p in pages],
         warnings=warnings,
+        parts=parts,
     )
