@@ -183,7 +183,7 @@ class _CrossReference:
 
     def place(self, c: Claim) -> None:
         cands = self.candidates(c)
-        confirming = [f for f in cands if self.names(f, c)]
+        confirming = [f for f in cands if self.names(f, c) and (id(f) not in self.from_parts or _near(f.bar, c.bar))]
         if confirming:
             return self.confirm(_nearest(confirming, c.bar), c)
         if c.untrusted:

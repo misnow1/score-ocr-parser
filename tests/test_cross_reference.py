@@ -188,3 +188,12 @@ def test_a_part_solo_far_from_the_open_solo_in_bars_is_another_solo(tmp_path):
         ("A", None, 9),  # the open solo stays open
         ("B", "Trombone", 17),
     ]
+
+
+def test_two_chairs_of_one_instrument_soloing_in_different_places_are_two_features(tmp_path):
+    report = parse_with(tmp_path, {"trumpet-2/Trpt2": "a_far", "trumpet-3/Trpt3": "a"})
+
+    assert [(f.rehearsal_mark, f.instrument, f.chair, f.bar, f.shared_with) for f in at(report, "A")] == [
+        ("A", "Trumpet", 2, 2, []),
+        ("A", "Trumpet", 3, 9, []),  # not folded into the solo 7 bars earlier
+    ]
