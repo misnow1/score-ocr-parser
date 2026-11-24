@@ -204,29 +204,71 @@ _SOLO_KEYS = ("page", "mark", "bar", "xfail")
 _RELATIONS = ("same", "doubling", "unexplained", "unknown")
 
 
-def part_shape_problems(facts: dict) -> list[str]:
-    """Part facts that are malformed rather than unmet: a part names a `slot` (its
-    instrument folder) and an `instrument`, takes only the keys of the schema, and
-    an `xfail` needs a reason; a solo needs a `page` and takes `mark`, `bar`, `xfail`."""
+def _is_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _solo_shape_problems(slot, solo) -> list[str]:
+    if not isinstance(solo, dict):
+        return [f"solo {solo!r} of part {slot} must be a mapping"]
+    problems = [f"solo {solo} takes no {key!r}" for key in solo if key not in _SOLO_KEYS]
+    if "page" not in solo:
+        problems.append(f"solo {solo} of part {slot} needs a page")
+    for key in ("page", "bar"):
+        if key in solo and not _is_int(solo[key]):
+            problems.append(f"solo {solo}: {key} must be a number")
+    if "mark" in solo and not (isinstance(solo["mark"], str) and solo["mark"]):
+        problems.append(f"solo {solo}: mark must be text")
+    if "xfail" in solo and not (isinstance(solo["xfail"], str) and solo["xfail"]):
+        problems.append(f"solo {solo}: xfail needs a reason")
+    return problems
+
+
+def _part_shape_problems(fact) -> list[str]:
+    if not isinstance(fact, dict):
+        return [f"part {fact!r} must be a mapping"]
     problems = []
-    for fact in facts.get("parts") or []:
-        for key in ("slot", "instrument"):
-            if not fact.get(key):
-                problems.append(f"part {fact} needs a {key}")
-        problems += [f"part {fact} takes no {key!r}" for key in fact if key not in _PART_KEYS]
-        chairs = fact.get("chairs", [])
-        if not isinstance(chairs, list) or not all(isinstance(c, int) for c in chairs):
-            problems.append(f"part {fact}: chairs must be a list of numbers")
-        if fact.get("relation", "same") not in _RELATIONS:
-            problems.append(f"part {fact}: relation must be one of {', '.join(_RELATIONS)}")
-        if "xfail" in fact and not fact["xfail"]:
-            problems.append(f"part {fact}: xfail needs a reason")
-        for solo in fact.get("solos", []):
-            if "page" not in solo:
-                problems.append(f"solo {solo} of part {fact.get('slot')} needs a page")
-            problems += [f"solo {solo} takes no {key!r}" for key in solo if key not in _SOLO_KEYS]
-            if "xfail" in solo and not solo["xfail"]:
-                problems.append(f"solo {solo}: xfail needs a reason")
+    for key in ("slot", "instrument"):
+        if not (isinstance(fact.get(key), str) and fact[key]):
+            problems.append(f"part {fact} needs a {key} (text)")
+    problems += [f"part {fact} takes no {key!r}" for key in fact if key not in _PART_KEYS]
+    chairs = fact.get("chairs", [])
+    if not isinstance(chairs, list) or not all(_is_int(c) for c in chairs):
+        problems.append(f"part {fact}: chairs must be a list of numbers")
+    if fact.get("relation", "same") not in _RELATIONS:
+        problems.append(f"part {fact}: relation must be one of {', '.join(_RELATIONS)}")
+    if "max_solos" in fact and not (_is_int(fact["max_solos"]) and fact["max_solos"] >= 0):
+        problems.append(f"part {fact}: max_solos must be a number, 0 or more")
+    if "xfail" in fact and not (isinstance(fact["xfail"], str) and fact["xfail"]):
+        problems.append(f"part {fact}: xfail needs a reason")
+    solos = fact.get("solos", [])
+    if not isinstance(solos, list):
+        problems.append(f"part {fact}: solos must be a list")
+        solos = []
+    for solo in solos:
+        problems += _solo_shape_problems(fact.get("slot"), solo)
+    return problems
+
+
+def part_shape_problems(facts: dict) -> list[str]:
+    """Part facts that are malformed rather than unmet. `parts` is a list of mappings;
+    a part names a `slot` (its instrument folder) and an `instrument`, takes only the
+    keys of the schema with the right types, and an `xfail` needs a reason; a solo needs
+    a `page` and takes `mark`, `bar`, `xfail`. Two facts for the same slot, instrument
+    and chairs are one part stated twice."""
+    parts = facts.get("parts")
+    if parts is None:
+        return []
+    if not isinstance(parts, list):
+        return [f"parts must be a list of part facts, not {type(parts).__name__}"]
+    problems = [p for fact in parts for p in _part_shape_problems(fact)]
+    if not problems:
+        seen = set()
+        for fact in parts:
+            key = (fact["slot"], fact["instrument"], tuple(fact["chairs"]) if "chairs" in fact else None)
+            if key in seen:
+                problems.append(f"part {fact['slot']}/{fact['instrument']} is given twice")
+            seen.add(key)
     return problems
 
 
@@ -254,28 +296,33 @@ def _solo_order_problem(report, solos: list[dict]) -> str | None:
     return None
 
 
-def _part_problems(report, fact: dict) -> list[str]:
-    problems = []
+def _part_problems(report, fact: dict) -> tuple[list[str], list[str]]:
+    """(unmet facts, stale solo xfails) of one part against its fact."""
+    unmet, stale = [], []
     solos = fact.get("solos", [])
     for want in solos:
         hit = any(_located(f, want) for f in report.features)
-        problems += _with_xfail(want, None if hit else f"no solo at {_place(want)}", f"solo at {_place(want)}")
+        if want.get("xfail"):
+            if hit:
+                stale.append(f"solo at {_place(want)} now passes; remove its xfail ({want['xfail']})")
+        elif not hit:
+            unmet.append(f"no solo at {_place(want)}")
     order = _solo_order_problem(report, solos)
     if order:
-        problems.append(order)
+        unmet.append(order)
     cap = fact.get("max_solos")
     if cap is not None and len(report.features) > cap:
-        problems.append(f"{len(report.features)} solos found, at most {cap} expected")
-    return problems
+        unmet.append(f"{len(report.features)} solos found, at most {cap} expected")
+    return unmet, stale
 
 
-def _part_fact_problems(reports: list, fact: dict) -> list[str]:
+def _part_fact_problems(reports: list, fact: dict) -> tuple[list[str], list[str]]:
     candidates = [r for r in reports if _is_part(r, fact)]
     if not candidates:
         chairs = f" chairs {fact['chairs']}" if "chairs" in fact else ""
         relation = f" ({fact['relation']})" if "relation" in fact else ""
-        return [f"no {fact['instrument']} part{chairs}{relation} in player slot {fact['slot']}"]
-    return min((_part_problems(r, fact) for r in candidates), key=len)
+        return [f"no {fact['instrument']} part{chairs}{relation} in player slot {fact['slot']}"], []
+    return min((_part_problems(r, fact) for r in candidates), key=lambda p: (len(p[0]), len(p[1])))
 
 
 def check_part_facts(reports: list, facts: list[dict]) -> list[str]:
@@ -284,18 +331,21 @@ def check_part_facts(reports: list, facts: list[dict]) -> list[str]:
     A part fact names the `slot` (the instrument folder the file sits in) and the
     `instrument` of the filename, optionally `chairs` (exact list), `relation`
     (same, doubling, unexplained, unknown), `solos` (each `page`, `mark` and `bar`
-    as given, matched exactly; the listed solos must appear in that order, not
-    necessarily adjacent), `max_solos` and `xfail: reason`. A solo takes its own
-    `xfail` and then leaves the order check. Facts the tool does not meet yet
-    keep failing until their xfail is removed.
+    as given, matched exactly against every feature of the part whatever its kind;
+    the listed solos must appear in that order, not necessarily adjacent),
+    `max_solos` (a cap on every feature of the part, vocal leads included) and
+    `xfail: reason`. A solo takes its own `xfail` and then leaves the order check.
+    Facts the tool does not meet yet keep failing until their xfail is removed; a
+    solo's stale xfail is reported even inside an xfail part.
     """
     problems = part_shape_problems({"parts": facts})
     if problems:
         return problems
     for fact in facts:
         label = f"part {fact['slot']}/{fact['instrument']}"
-        found = _part_fact_problems(reports, fact)
-        problems += _with_xfail(fact, "; ".join(found) if found else None, label)
+        unmet, stale = _part_fact_problems(reports, fact)
+        problems += _with_xfail(fact, "; ".join(unmet) if unmet else None, label)
+        problems += stale
     return problems
 
 
@@ -568,9 +618,40 @@ def test_malformed_part_facts_are_rejected_not_ignored(trumpet_part):
         part_fact(chairs=1),
         part_fact(xfail=""),
         part_fact(solos=[{"page": 1, "xfail": ""}]),
+        "Trumpet",  # not a mapping
+        part_fact(solos=3),
+        part_fact(solos={"page": 1}),
+        part_fact(solos=["page"]),
+        part_fact(max_solos="two"),
+        part_fact(max_solos=True),
+        part_fact(max_solos=-1),
+        part_fact(solos=[{"page": "1"}]),
+        part_fact(solos=[{"page": 1, "bar": "6"}]),
+        part_fact(solos=[{"page": 1, "mark": 1}]),
+        part_fact(chairs=[True]),
+        part_fact(xfail=3),
+        {"slot": 1, "instrument": "Trumpet"},
     ):
         assert check_part_facts(trumpet_part, [fact]), fact
         assert part_shape_problems({"parts": [fact]}), fact
+
+
+def test_a_parts_section_that_is_not_a_list_is_rejected():
+    assert part_shape_problems({"parts": part_fact()})
+    assert part_shape_problems({"parts": "Trumpet"})
+    assert part_shape_problems({}) == [] and part_shape_problems({"parts": None}) == []
+
+
+def test_duplicate_part_facts_are_reported(trumpet_part):
+    problems = check_part_facts(trumpet_part, [part_fact(), part_fact(solos=[{"page": 1}])])
+    assert len(problems) == 1 and "twice" in problems[0]
+    assert part_shape_problems({"parts": [part_fact(chairs=[1]), part_fact(chairs=[2])]}) == []  # told apart by chairs
+
+
+def test_a_stale_solo_xfail_inside_an_expected_to_fail_part_is_still_reported(trumpet_part):
+    fact = part_fact(xfail="part gap", max_solos=0, solos=[{"page": 1, "mark": "A", "xfail": "stale"}])
+    problems = check_part_facts(trumpet_part, [fact])
+    assert len(problems) == 1 and "solo at page 1, mark A now passes" in problems[0]
 
 
 def test_find_parts_matches_the_song_title_across_every_instrument_folder(tmp_path):
@@ -588,11 +669,11 @@ def test_find_parts_matches_the_song_title_across_every_instrument_folder(tmp_pa
 
 def test_find_parts_ignores_a_score_title_that_only_shares_a_word(tmp_path):
     place_part(tmp_path, "trumpet-1", "Synthetic Tune Trpt1")
-    place_part(tmp_path, "trumpet-2", "In The Long Winter 10:15 Trpt2")
+    place_part(tmp_path, "trumpet-2", "Plain Song 10:15 Trpt2")
 
     assert find_parts(tmp_path, "Tune") == []
-    place_part(tmp_path, "trumpet-3", "Away In A Manger Trpt3")
-    assert find_parts(tmp_path, "Holiday In 11.3.26") == []  # "In" is shared, the song is not
+    place_part(tmp_path, "trumpet-3", "Long Short Tune Medley Trpt3")
+    assert find_parts(tmp_path, "Short Tune 11.3.26") == []  # words are shared, the song is not
     assert find_parts(tmp_path / "missing", "Synthetic Tune") == []
 
 
@@ -634,8 +715,10 @@ def test_corpus_score_matches_approved_facts(stem):
 @pytest.mark.parametrize("stem", sorted(s for s, facts in load_expected().items() if facts.get("parts")))
 def test_corpus_score_parts_match_approved_facts(stem):
     reports = parts_of_score(Path(PARTS_DIR), stem)
-    assert reports, f"no parts found in SCORE_PARTS_DIR for {stem!r}"
-    assert check_part_facts(reports, load_expected()[stem]["parts"]) == []
+    facts = load_expected()[stem]["parts"]
+    if any(not fact.get("xfail") for fact in facts):  # a song whose part facts all xfail may have no parts yet
+        assert reports, f"no parts found in SCORE_PARTS_DIR for {stem!r}"
+    assert check_part_facts(reports, facts) == []
 
 
 def _corpus_counts_main():

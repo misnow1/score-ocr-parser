@@ -21,7 +21,7 @@ SCORES_FOLDER = "scores"
 
 def _words(title: str) -> str:
     """The normalised title without words that hold a digit: a date left in a filename
-    ("11:3:26") or a year-tagged name ("JC2026") must not keep a title from matching,
+    ("11:3:26") or a year-tagged name ("TAG2026") must not keep a title from matching,
     or give another one a match."""
     return " ".join(w for w in _normalise(title).split() if not any(c.isdigit() for c in w))
 
@@ -33,7 +33,7 @@ def _same_song(a: str, b: str) -> bool:
     if min(len(a), len(b)) < MIN_LENGTH_RATIO * max(len(a), len(b)):
         return False
     # Whole-title similarity, not the partial one --numbers-dir uses: a short title
-    # ("Holiday In") sits inside a longer one ("Away In A Manger") without being it.
+    # ("Short Tune") sits inside a longer one ("Long Short Tune Medley") without being it.
     return fuzz.token_sort_ratio(a, b) >= MIN_SCORE
 
 
