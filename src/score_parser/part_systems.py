@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from .layout import lines
 from .measures import BAR_ROW_REACH, merge_barlines, page_number_zone, share_barlines
 from .models import Page, Token
-from .part_labels import START_REACH, StartLabel, confirmed, read_start_labels
+from .part_labels import START_REACH, StartLabel, bars_in, read_start_labels
 from .staves import Staff
 from .systems import StartNote, System, place_rows
 
@@ -23,8 +23,9 @@ ONE_LINE_HALF = 10.0  # a one-line staff is taken as this far above and below it
 MIN_ONE_LINE_BARLINES = 2  # a lone rule with fewer barlines through it is no staff
 TIME_SIGNATURE_REACH = 80.0  # staff-sized digits this near the staff's left end are the meter
 REST_NUMERAL_HEIGHT = 1.5  # a digit this many staff heights tall is a multi-bar rest's count on the staff
-REST_ABOVE_HEIGHT = 1.1  # ...and this many when it sits just above the staff, as most parts print it
+REST_ABOVE_HEIGHT = 0.95  # ...and this many when it sits just above the staff, as most parts print it
 REST_ABOVE_REACH = 6.0  # a digit that ends this far above the top line (or less) sits on the staff
+REST_CROSS = 2.0  # ...and one may cross the top line by this much (some fonts do)
 
 
 @dataclass
@@ -94,11 +95,20 @@ def _rest_numerals(page: Page, staves: list[PartStaff]) -> list[tuple[Token, int
             continue
         index = max(range(len(staves)), key=lambda i: staves[i].overlap(tok))
         staff = staves[index]
-        near_start = (tok.x0 + tok.x1) / 2 < staff.left + TIME_SIGNATURE_REACH
+        centre = (tok.x0 + tok.x1) / 2
         height = tok.y1 - tok.y0
-        on_staff = staff.overlap(tok) > 0 and height >= REST_NUMERAL_HEIGHT * staff.height
-        above_staff = 0 <= staff.top - tok.y1 <= REST_ABOVE_REACH and height >= REST_ABOVE_HEIGHT * staff.height
-        if (on_staff or above_staff) and not near_start:
+        # A time signature sits on the staff, never above it; a bar number sits above it.
+        on_staff = (
+            staff.overlap(tok) > 0
+            and height >= REST_NUMERAL_HEIGHT * staff.height
+            and centre >= staff.left + TIME_SIGNATURE_REACH
+        )
+        above_staff = (
+            -REST_CROSS <= staff.top - tok.y1 <= REST_ABOVE_REACH
+            and height >= REST_ABOVE_HEIGHT * staff.height
+            and centre >= staff.left + START_REACH
+        )
+        if on_staff or above_staff:
             found.append((tok, index))
     return found
 
@@ -123,7 +133,9 @@ def find_part_systems(page: Page, label: str, one_line: bool = False) -> list[Sy
     for tok, i in rests:
         systems[i].rests.append(((tok.x0 + tok.x1) / 2, int(tok.text)))
     skip = {id(tok) for tok, _ in rests}
-    starts, placed, read = read_start_labels(staves, [t for t in page.tokens if id(t) not in skip])
+    lengths = [bars_in(system.barlines, system.rests) for system in systems]
+    joined = [system.joins_previous for system in systems]
+    starts, placed, read = read_start_labels(staves, [t for t in page.tokens if id(t) not in skip], lengths, joined)
     skip |= {id(tok) for tok in read}
     furniture = staves[0].centre - BAR_ROW_REACH
     rows = [row for ln in lines(page.tokens) if (row := [t for t in ln if id(t) not in skip]) and row[0].yc >= furniture]
@@ -132,20 +144,19 @@ def find_part_systems(page: Page, label: str, one_line: bool = False) -> list[Sy
         system.bars = [bar for bar in system.bars if bar[0] <= staff.left + START_REACH]
     for i, (system, start) in enumerate(zip(systems, starts)):
         system.bars = sorted([*system.bars, *((t.x0, int(t.text), t.x1) for t in placed[i])])
-        if start:
-            system.start_note = _overprint_note(start, starts[i - 1] if i else None, systems[i - 1] if i else None)
+        if start and start.pair:
+            system.start_note = _overprint_note(start)
     return systems
 
 
-def _overprint_note(label: StartLabel, before: StartLabel | None, system_before: System | None) -> StartNote | None:
+def _overprint_note(label: StartLabel) -> StartNote:
     """What to say of a staff-start number that was one of an overprinted pair,
-    and whether counting the rests of the staff before confirmed it."""
-    if label.pair is None or system_before is None:
-        return None
-    low, high = label.pair
+    and whether counting the staff before from the lower number reached it."""
+    low, high = label.pair or (0, label.number)
     said = f"staff-start label overprinted: {low} and {high} read as two numbers, {high} for this staff"
-    if confirmed(label, before, system_before.barlines, system_before.rests):
+    if label.confirmed:
         return StartNote(f"{said}; counting the staff before from {low} (multi-bar rests included) reaches {high}", True)
     return StartNote(
-        f"{said}; not confirmed by counting the multi-bar rests of the staff before, so the bar may be off", False
+        f"{said}; not confirmed by counting the staff before from {low} (multi-bar rests included), so the bar may be off",
+        False,
     )

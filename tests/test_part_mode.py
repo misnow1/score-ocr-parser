@@ -269,11 +269,56 @@ def test_overprinted_labels_confirmed_by_the_rest_count_keep_full_bar_confidence
 
 
 def test_overprinted_labels_the_rests_do_not_confirm_keep_the_later_number_with_a_reason(tmp_path):
-    # The rests add up to 7 + 8 + 7: 33 + 22 bars is 55, not the 56 printed.
+    # A staff numbered 29 comes first, so the 33 is a bar number (29 + 4 bars). The rests
+    # add up to 7 + 8 + 7: 33 + 22 bars is 55, not the 56 printed.
     report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", UNCONFIRMED))
 
     assert [(f.page, f.bar) for f in report.features] == [(1, 56), (1, 65)]
     first = report.features[0]
     assert first.confidence == 0.7  # 0.05 below a counted bar
-    assert "not confirmed by counting the multi-bar rests" in " ".join(first.reasons)
+    assert "not confirmed by counting the" in " ".join(first.reasons)
     assert report.features[1].confidence == 0.75  # the later pair (60, 64) still counts out
+
+
+SAME_NUMBER = FIXTURES / "part_same_number_staves.pdf"
+STRAY = FIXTURES / "part_stray_number.pdf"
+RESTS_ABOVE = FIXTURES / "part_rests_above.pdf"
+
+
+def test_close_staves_that_print_the_same_number_each_count_from_their_own(tmp_path):
+    # The number above the second staff of a pair also sits under the first staff, but it is
+    # that staff's own and nearer to it: the second staff must not count on from the first.
+    report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", SAME_NUMBER))
+
+    assert [(f.page, f.bar) for f in report.features] == [(1, 7)]
+
+
+def test_a_stray_low_digit_beside_a_bar_number_is_no_overprinted_pair(tmp_path):
+    # A "2" (a volta, a cue's chair) printed beside the 6 at a staff start: counting five bars
+    # from it does not reach 6, so it anchors nothing and the label is not "overprinted".
+    report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", STRAY))
+
+    assert [(f.page, f.bar) for f in report.features] == [(1, 2), (1, 7)]
+    assert not any("overprinted" in reason for f in report.features for reason in f.reasons)
+
+
+def test_rests_above_the_staff_count_even_when_they_cross_the_top_line_but_other_digits_do_not(tmp_path):
+    # Above the staff: a 4 crossing the top line and a 3 as tall as the staff (rests), then a
+    # text-sized 3 and a staff-sized 9 well above the line (not rests).
+    report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", RESTS_ABOVE))
+
+    assert [(f.page, f.bar) for f in report.features] == [(1, 10)]
+    assert "plus 5 bars of multi-bar rests" in " ".join(report.features[0].reasons)
+
+
+def test_a_number_repeated_under_its_own_staff_is_not_the_next_staffs_label(tmp_path):
+    report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", FIXTURES / "part_repeated_number.pdf"))
+
+    assert [(f.page, f.bar) for f in report.features] == [(1, 6)]
+
+
+def test_staves_of_one_system_never_make_an_overprinted_pair(tmp_path):
+    report = parse_part(place(tmp_path, "violin", "Synthetic Tune - Violin", FIXTURES / "part_joined_staves.pdf"))
+
+    assert len(report.features) == 1
+    assert not any("overprinted" in reason for f in report.features for reason in f.reasons)
