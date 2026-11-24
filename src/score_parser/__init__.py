@@ -9,12 +9,15 @@ from .instruments import build_instrumentation, vocabulary_hits
 from .matching import draft_name, match_slug
 from .models import PageInfo, ParseOptions, PartReport, ScoreReport
 from .part import parse_part
-from .parts import find_parts, parts_warnings
+from .parts import PartFiles, find_part_files, find_parts, parts_warnings
 from .staves import unlabeled_staff_warnings
 from .source import read_pages, scan_warnings
 from .title import score_title
 
-__all__ = ["parse_score", "parse_part", "ParseOptions", "ScoreReport", "PartReport"]
+__all__ = [
+    "parse_score", "parse_part", "find_parts", "find_part_files", "PartFiles",
+    "ParseOptions", "ScoreReport", "PartReport",
+]
 
 
 def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreReport:

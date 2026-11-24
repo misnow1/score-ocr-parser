@@ -6,6 +6,7 @@ filename without its part word and noise) names the score's song. Matched files
 are read with part mode, in place. Nothing is written.
 """
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .matching import same_song
@@ -26,13 +27,33 @@ def _part_files(parts_dir: Path) -> list[Path]:
     ]
 
 
-def find_parts(parts_dir: Path, title: str, options: ParseOptions) -> PartsReport:
+@dataclass
+class PartFiles:
+    """The PDFs of a parts tree split by one song: those for it, and the rest."""
+
+    matched: list[Path] = field(default_factory=list)
+    other: list[Path] = field(default_factory=list)
+
+
+def find_part_files(parts_dir: str | Path, title: str) -> PartFiles:
+    """The part files in `parts_dir` that belong to the song `title`, in folder
+    then file order. The one lookup behind `--parts-dir`; it reads only the
+    directory and the file names (no PDF is opened) and prints nothing."""
+    files = PartFiles()
+    for pdf in _part_files(Path(parts_dir)):
+        (files.matched if same_song(read_part_info(pdf)[1], title) else files.other).append(pdf)
+    return files
+
+
+def _name(pdf: Path) -> str:
+    return f"{pdf.parent.name}/{pdf.name}"
+
+
+def find_parts(parts_dir: str | Path, title: str, options: ParseOptions | None = None) -> PartsReport:
     """The parts in `parts_dir` for the song `title`, each read with part mode."""
-    report = PartsReport()
-    for pdf in _part_files(parts_dir):
-        if not same_song(read_part_info(pdf)[1], title):
-            report.other_files.append(f"{pdf.parent.name}/{pdf.name}")
-            continue
+    files = find_part_files(parts_dir, title)
+    report = PartsReport(other_files=[_name(pdf) for pdf in files.other])
+    for pdf in files.matched:
         try:
             report.parts.append(parse_part(pdf, options=options))
         except Exception as exc:  # one bad part must not lose the others
@@ -43,7 +64,7 @@ def find_parts(parts_dir: Path, title: str, options: ParseOptions) -> PartsRepor
 def _failed(pdf: Path, exc: Exception) -> PartReport:
     info, title = read_part_info(pdf)
     msg = " ".join(f"{type(exc).__name__}: {exc}".split())
-    return PartReport(title, info, warnings=[f"could not be read: {msg}"], file=f"{pdf.parent.name}/{pdf.name}")
+    return PartReport(title, info, warnings=[f"could not be read: {msg}"], file=_name(pdf))
 
 
 def parts_warnings(parts: PartsReport) -> list[str]:

@@ -5,7 +5,7 @@ synthetic score and a temp tree of synthetic one-staff parts."""
 import shutil
 from pathlib import Path
 
-from score_parser import ParseOptions, parse_score
+from score_parser import ParseOptions, find_part_files, parse_score
 from score_parser.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures" / "synthetic"
@@ -213,6 +213,48 @@ def test_a_scores_filename_noise_and_a_parenthesis_do_not_hide_the_song(tmp_path
         "trumpet-2/SYNTHETIC TUNE (lead vocal).pdf",
         "violin/Synthetic Tune Violin Solo 1.pdf",
     ]
+
+
+def test_numbered_and_similar_titles_stay_apart(tmp_path):
+    medley_1 = find_part_files(tree(tmp_path, [
+        "trumpet-1/Medley 1 Trpt1.pdf",
+        "trumpet-2/Medley 2 Trpt2.pdf",  # another number: another song
+        "bass/Holiday In Bass.pdf",
+        "drums/Away In A Manger Drums.pdf",
+    ]), "Medley 1")
+    holiday = find_part_files(tmp_path / "parts", "Holiday In 11-3-26")
+
+    assert [p.name for p in medley_1.matched] == ["Medley 1 Trpt1.pdf"]
+    assert [p.name for p in holiday.matched] == ["Holiday In Bass.pdf"]  # not Away In A Manger
+
+
+def test_filename_noise_words_of_a_score_or_part_do_not_hide_the_song(tmp_path):
+    files = find_part_files(tree(tmp_path, [
+        "trumpet-1/Synthetic Tune Trpt1 EPRINT.pdf",
+        "trombone-3/TROMBONE 3Synthetic Tune E.pdf",  # a digit glued to the title, a cut-off tag
+        "drums/Synthetic Tune extended version Drums.pdf",
+        "bass/Synthetic Tune first Bass.pdf",
+    ]), "Synthetic Tune Revised Extended Expanded Instr")
+
+    assert len(files.matched) == 4 and files.other == []
+
+
+def test_find_part_files_is_the_pure_lookup_behind_the_option(tmp_path, capsys):
+    root = tree(tmp_path, [
+        "trumpet-1/Synthetic Tune Trpt1.pdf",
+        "scores/Synthetic Tune SCORE.pdf",
+        "trumpet-1/Other Song Trpt1.pdf",
+        "drums/Synthetic Tune Drums.pdf",
+    ])
+
+    files = find_part_files(root, "Synthetic Tune")
+
+    assert [(p.parent.name, p.name) for p in files.matched] == [
+        ("drums", "Synthetic Tune Drums.pdf"),
+        ("trumpet-1", "Synthetic Tune Trpt1.pdf"),
+    ]
+    assert [p.name for p in files.other] == ["Other Song Trpt1.pdf"]
+    assert capsys.readouterr().out == ""
 
 
 def test_a_leading_instrument_name_does_not_hide_the_song(tmp_path):

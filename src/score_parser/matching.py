@@ -1,6 +1,7 @@
 """Match a score title to an existing planner number slug (read-only)."""
 
 import re
+from functools import cache
 from pathlib import Path
 
 import yaml
@@ -78,15 +79,24 @@ _YEAR_BEFORE_WORD = re.compile(r"\b(?:19|20)\d{2}(?=[a-z])")  # "2026alto"
 _SCORE_WORD = re.compile(r"\bscores?\d*\b")  # "score", "score1"
 _PARENTHESIS = re.compile(r"[(\[][^)\]]*[)\]]?")  # "(expanded instrumentation)", also one left open
 _DATE_RUN = re.compile(r"(?:\b\d{1,2}\b\s*){2,}")  # "10 3 26": a date, however it was punctuated
+_DIGIT_THEN_CAPITAL = re.compile(r"(?<=\d)(?=[A-Z][a-z])")  # "TROMBONE 3The Most"
 _RESIDUE_WINDOW = 3  # words of a title's tail tried as an instrument name
 
 
 def _song_key(title: str) -> str:
-    """A title as words to compare: normalised, with dates and year tags dropped."""
-    text = _PARENTHESIS.sub(" ", title.lower())
+    """A title as words to compare: normalised, with dates, year tags, "score"
+    and the filename noise words of `title_noise` (data/title_aliases.yaml) dropped.
+    A number that is part of a title ("Medley 2") stays."""
+    text = _PARENTHESIS.sub(" ", _DIGIT_THEN_CAPITAL.sub(" ", title).lower())
     for pattern in (_INITIALS_YEAR, _GLUED_YEAR, _YEAR_BEFORE_WORD):
         text = pattern.sub(" ", text)
-    return " ".join(_SCORE_WORD.sub(" ", _DATE_RUN.sub(" ", _normalise(text))).split())
+    words = _SCORE_WORD.sub(" ", _DATE_RUN.sub(" ", _normalise(text))).split()
+    return " ".join(w for w in words if w not in _title_noise())
+
+
+@cache
+def _title_noise() -> frozenset[str]:
+    return frozenset(load("title_aliases.yaml")["title_noise"])
 
 
 def _names_of_song(key: str) -> set[str]:
@@ -111,7 +121,8 @@ def _is_part_residue(words: list[str]) -> bool:
     labelling: an instrument ("Violin", "TBN 1 2") or a description of the file
     ("background", "lyrics only"; `part_descriptions` in data/title_aliases.yaml)."""
     tail = " ".join(words)
-    if any(tail.startswith(_song_key(d)) for d in load("title_aliases.yaml")["part_descriptions"]):
+    descriptions = (_song_key(d) for d in load("title_aliases.yaml")["part_descriptions"])
+    if any(tail == d or tail.startswith(d + " ") for d in descriptions):
         return True
     return any(resolve(" ".join(words[:n])) for n in range(1, min(_RESIDUE_WINDOW, len(words)) + 1))
 
