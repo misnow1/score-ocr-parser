@@ -11,7 +11,7 @@ from typing import Literal, NamedTuple
 
 from .layout import count_chords, is_chord_symbol, running_headers, strip_chord_run
 from .instruments import Roster, resolve, resolve_against_first_system
-from .models import Feature, FeatureKind, Location, Page, Participant, Voice
+from .models import Feature, FeatureKind, Location, Page, Participant, ScoreMark, Voice
 from .measures import BarKind, count_bars, current_mark, drop_out_of_sequence
 from .systems import Phrase, System, find_systems
 from .handover import sole_leads
@@ -740,10 +740,28 @@ def find_features(
     """(features, warnings). Instruments come only from the score's
     instrumentation (`roster`: first system, variants, recurring instruments);
     a solo's own text may also name a missing instrument (a possible feature)."""
+    features, warnings, _ = find_features_and_marks(pages, roster)
+    return features, warnings
+
+
+def find_features_and_marks(
+    pages: list[Page], roster: Roster
+) -> tuple[list[Feature], list[str], list[ScoreMark]]:
+    """`find_features` plus the score's rehearsal marks in reading order."""
     headers = running_headers(pages)
-    return features_in(
-        [s for page in pages for s in find_systems(page, headers)], roster
-    )
+    systems = [s for page in pages for s in find_systems(page, headers)]
+    features, warnings = features_in(systems, roster)
+    return features, warnings, marks_in(systems)
+
+
+def marks_in(systems: list[System]) -> list[ScoreMark]:
+    """Each rehearsal mark at its first printing, in reading order, with its
+    bar. Call after `features_in`, which counts the bars."""
+    marks: dict[str, ScoreMark] = {}
+    for system in systems:
+        for x, text in system.marks:
+            marks.setdefault(text, ScoreMark(text, system.page, system.bar_at(x).bar))
+    return list(marks.values())
 
 
 def features_in(systems: list[System], roster: Roster) -> tuple[list[Feature], list[str]]:

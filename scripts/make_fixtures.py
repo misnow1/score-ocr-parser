@@ -1015,6 +1015,71 @@ def one_staff_part(glyph_font: Path, out: Path) -> None:
     doc.save(out)
 
 
+XREF_LABELS = ["Alto Saxophone 1", "Clarinet in Bb", "Trumpet in Bb 1-4", "Trombone 1-4", "Piano", "Drums"]
+
+
+def cross_reference_score(music_font: Path, out: Path) -> None:
+    """A score to cross-reference parts into. Page 1: mark A at bar 1 with an
+    open "(SOLOS)" printed over every staff at bar 9, then mark B at bar 17 with
+    a "TBN SOLO" over the Trombone staff (bar 21). Page 2: mark C at bar 33 with
+    no marking at all."""
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=612, height=792)
+    p1.insert_text((200, 60), "Synthetic Cross Tune", fontname="helv", fontsize=24)
+    _system(p1, 150, XREF_LABELS, music_font, [
+        (150, 120, "1", 7), (300, 120, "9", 7), (200, 105, "A", 12),
+        *[(300, ys_at(150, i) - 12, "(SOLOS)", 9) for i in range(6)],
+    ])
+    _system(p1, 400, XREF_LABELS, music_font, [
+        (150, 370, "17", 7), (200, 355, "B", 12),
+        (350, ys_at(400, 3) - 12, "TBN SOLO", 9),
+    ])
+    p2 = doc.new_page(width=612, height=792)
+    _system(p2, 150, XREF_LABELS, music_font, [(150, 120, "33", 7), (200, 105, "C", 12)])
+    doc.save(out)
+
+
+# (page, first bar, mark, solo interval, wording) per staff; see cross_reference_part.
+XREF_PARTS = {
+    "a_and_c": [(1, 6, "A", 3, "SOLO"), (2, 33, "C", 1, "SOLO")],  # solos at bars 9 (A) and 34 (C)
+    "a": [(1, 6, "A", 3, "SOLO")],
+    "none": [(1, 6, "A", None, ""), (2, 33, "C", None, "")],
+    "noisy": [  # the same solo read twice, one more at C, and one at a mark the score lacks
+        (1, 6, "A", 3, "SOLO"), (1, 6, "A", 3, "SOLO"), (2, 33, "C", 1, "SOLO"), (2, 38, "Z", 2, "SOLO")
+    ],
+    "cue_tbn": [(1, 17, "B", 1, "TBN SOLO")],
+    "unmarked": [(1, 6, None, 3, "SOLO")],  # a solo at bar 9 under no rehearsal mark
+    "many": [  # seven distinct solos: far more than a real part has
+        (1, 6, "A", 3, "SOLO"), (1, 11, "A", 1, "SOLO"), (1, 16, "A", 1, "SOLO"), (1, 21, "A", 1, "SOLO"),
+        (2, 33, "C", 1, "SOLO"), (2, 38, "C", 1, "SOLO"), (2, 43, "C", 1, "SOLO"),
+    ],
+    "a_far": [(1, 1, "A", 1, "SOLO")],  # mark A, but bar 2: another solo than the open one at bar 9
+    "b_at_17": [(1, 17, "B", 0, "SOLO")],  # a solo at bar 17 (B), where the score marks the trombone
+}
+
+
+def cross_reference_part(glyph_font: Path, out: Path, staves) -> None:
+    """A one-instrument part for cross-referencing. `staves` are (page, first
+    bar, mark or None, solo interval or None, solo wording): one staff each,
+    five bars wide, its first bar number printed, a solo wording in the given
+    interval (bar = first bar + interval)."""
+    doc = pymupdf.open()
+    pages: dict[int, list] = {}
+    for page, first, mark, interval, wording in staves:
+        pages.setdefault(page, []).append((first, mark, interval, wording))
+    for number in sorted(pages):
+        page = doc.new_page(width=612, height=792)
+        for row, (first, mark, interval, wording) in enumerate(pages[number]):
+            top = PART_STAFF_TOP + 150 * row
+            texts = [(50, top - 11, str(first), 7)] if first is not None else []
+            if mark:
+                texts.append((200, top - 18, mark, 12))
+            if interval is not None:
+                texts.append((PART_BARLINES[interval] + 20, top - 8, wording, 9))
+            _part_system(page, top, glyph_font, texts)
+    doc.save(out)
+
+
 def one_line_part(out: Path) -> None:
     """A percussion part: one-line staves with short barlines, and a long rule
     under the title that is no staff. Mark A on the first staff; the second
@@ -1109,6 +1174,9 @@ def main() -> None:
         build_music_font(glyphs, family="SynGlyphs", chars="&b")
         one_staff_part(glyphs, OUT / "part_one_staff.pdf")
         one_line_part(OUT / "part_one_line.pdf")
+        cross_reference_score(font, OUT / "finale_cross_reference.pdf")
+        for name, staves in XREF_PARTS.items():
+            cross_reference_part(glyphs, OUT / f"part_xref_{name}.pdf", staves)
     for dpi in (300, 90):
         scanned(OUT / "finale_full_labels.pdf", OUT / f"scan_{dpi}dpi.pdf", dpi)
     scanned(OUT / "label_repair_ocr_misreads.pdf", OUT / "scan_label_misreads.pdf", 300)

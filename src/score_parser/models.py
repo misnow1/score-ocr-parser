@@ -123,6 +123,16 @@ class Feature:
 
 
 @dataclass
+class ScoreMark:
+    """A rehearsal mark at its first printing in the score: where cross-referencing
+    finds the section a part solo belongs to. Internal; not part of the report."""
+
+    text: str
+    page: int
+    bar: int | None
+
+
+@dataclass
 class FlowStep:
     """One draft `flow:` step in the planner's shape (never kind or position)."""
 
