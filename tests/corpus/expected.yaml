@@ -76,10 +76,10 @@ scores:
 
   "Winter Wonderland JC2026 SCORE NOT FINAL":
     instruments: [Soprano Sax, Clarinet, Trumpet]
-    # Nine features: one shared marking at A, a clarinet solo at F and seven vocal leads (a lead that
+    # Ten features: one shared marking at A, clarinet solos at F and M and seven vocal leads (a lead that
     # runs over a page turn is one feature, so no second female feature on p7; a female harmony over
     # the male lead on p5 is not a lead of its own). The tool reports eight: the clarinet at F is missed.
-    max_features: 9
+    max_features: 10
     features:
       - {instruments: [Clarinet, Soprano Sax, Trumpet], kind: shared, page: 1, bar: 9, mark: A, xfail: "marker A m9 is read (p1, bar 9, mark A) on the Clarinet feature; Soprano Sax and Trumpet 3 carry no marking text at that place, so they are not reported with it"}
       # Vocal leads are features of kind "vocal lead" with a voice, not instruments.
@@ -87,11 +87,14 @@ scores:
       - {instrument: Vocal, kind: vocal, voice: male, page: 3, mark: C, xfail: "the male lead is reported on p4, not p3 at C"}
       # Female from 4 bars after D, running through E (p6-7).
       - {instrument: Vocal, kind: vocal, voice: female, page: 6, mark: D}
-      - {instrument: Clarinet, page: 8, mark: F, xfail: "no solo wording: the only marking is the word CLARINET above the staff over the sax group"}
+      # The solo at F is not marked: the clarinet is the only brass or woodwind playing from F to almost G, where Soprano Sax and Trumpet 3 join. The only text is the word CLARINET above the sax group.
+      - {instrument: Clarinet, page: 8, mark: F, xfail: "no solo marking: the solo is implied by the clarinet playing alone from F to almost G (the other winds rest in their parts)"}
       # At H the male takes over from the female and the backing vocals, then the female returns 4 bars later.
       - {instrument: Vocal, kind: vocal, voice: male, page: 10, mark: H}
       - {instrument: Vocal, kind: vocal, voice: female, page: 10, mark: H}
       - {instrument: Vocal, kind: vocal, voice: male, page: 15, mark: M}
+      # The Clarinet part marks a solo at M (found by reading the part, not the score).
+      - {instrument: Clarinet, mark: M, xfail: "the conductor score shows no clarinet solo at M; only the Clarinet part marks it"}
       - {instrument: Vocal, kind: vocal, voice: female, page: 16}
     # Order the tool gets right (the clarinet at F is not reported, so not listed).
     order:
@@ -121,7 +124,7 @@ scores:
     # One feature: a violin solo (p5, bar 56).
     max_features: 1
     features:
-      - {instrument: Violin, page: 5, bar: 56, xfail: "the violin is now reported on p5 as a possible feature, but at bar 48: barlines cannot be counted there (bar kind nearest), so the nearest printed number is the bar that starts the 8-measure rest; order and section are right"}
+      - {instrument: Violin, page: 5, bar: 56, xfail: "reported on p5 as a possible feature but at bar 48, where an 8-measure rest starts; the solo starts at bar 56. In the violin part the bar labels 33, 40 and 48 each start a rest of 7, 8 and 8 bars, and the 56 label is jammed into the 33 label at the staff start; the solo is improvised (chords above the staves, hash marks inside them, no solo wording); order and section are right"}
 
   "I HEARD THE BELLS ON CHRISTMAS DAY- SCORE.":
     # Seven features: six vocal cues and one clarinet solo. Pages only, apart from the first bar.
