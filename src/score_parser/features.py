@@ -757,13 +757,25 @@ def find_features_and_marks(
 
 def map_of(systems: list[System]) -> ScoreMap:
     """Every printing of a rehearsal mark, in reading order, with its bar and the
-    bar the next printing starts at, and each numbered system's first bar. Call
+    bar the next printing starts at, and each numbered system's first bar. A mark
+    on a system that prints no bar numbers gets a bar estimated between the
+    numbered systems around it, so the range before it still ends there. Call
     after `features_in`, which counts the bars."""
-    marks = [
-        ScoreMark(text, system.page, system.bar_at(x).bar)
-        for system in systems
-        for x, text in system.marks
-    ]
+    numbered = [(i, system.bars[0][1]) for i, system in enumerate(systems) if system.bars]
+
+    def estimate(i: int) -> int | None:
+        before = [n for n in numbered if n[0] < i]
+        after = [n for n in numbered if n[0] > i]
+        if not (before and after):
+            return None
+        (i0, b0), (i1, b1) = before[-1], after[0]
+        return round(b0 + (b1 - b0) * (i - i0) / (i1 - i0))
+
+    marks = []
+    for i, system in enumerate(systems):
+        for x, text in system.marks:
+            bar = system.bar_at(x).bar
+            marks.append(ScoreMark(text, system.page, bar if bar is not None else estimate(i)))
     for i, mark in enumerate(marks):
         mark.end = next(
             (m.bar for m in marks[i + 1 :] if m.bar is not None and (mark.bar is None or m.bar > mark.bar)), None
