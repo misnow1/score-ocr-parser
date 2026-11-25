@@ -148,9 +148,8 @@ class BarCount:
     def bar_at(self, x: float) -> BarReading | None:
         i = _interval(self.barlines, x)
         if self.anchors:
-            before = [a for a in self.anchors if a[0] <= i]
-            idx, number = before[-1] if before else self.anchors[0]
-            bar = number + (i - idx) + self._extra_before(i) - self._extra_before(idx)
+            idx, number = self._anchor(i)
+            bar = self._first_bar(i)
             away = abs(i - idx)
             if away == 0:
                 return BarReading(bar, "counted", f"nearest bar number {number}")
@@ -160,7 +159,7 @@ class BarCount:
             plus = f" plus {rests} bars of multi-bar rests" if rests else ""
             return BarReading(bar, "counted", f"counted {away} {plural}{plus} {direction} printed bar {number}: bar {bar}")
         if self.carried is not None:
-            bar = self.carried + i + self._extra_before(i)
+            bar = self._first_bar(i)
             rests = self._extra_before(i)
             plus = f" plus {rests} bars of multi-bar rests" if rests else ""
             return BarReading(
@@ -182,10 +181,15 @@ class BarCount:
                 found.append((first, self.skipped.get(i, 0) + 1, i in self.skipped))
         return found
 
+    def _anchor(self, i: int) -> tuple[int, int]:
+        """The printed number (barline index, number) interval `i` is counted from."""
+        before = [a for a in self.anchors if a[0] <= i]
+        return before[-1] if before else self.anchors[0]
+
     def _first_bar(self, i: int) -> int | None:
+        """The number of the first bar of interval `i`, None when nothing numbers it."""
         if self.anchors:
-            before = [a for a in self.anchors if a[0] <= i]
-            idx, number = before[-1] if before else self.anchors[0]
+            idx, number = self._anchor(i)
             return number + (i - idx) + self._extra_before(i) - self._extra_before(idx)
         if self.carried is not None:
             return self.carried + i + self._extra_before(i)

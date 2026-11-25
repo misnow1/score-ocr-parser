@@ -1279,53 +1279,64 @@ XREF_PARTS = {
 }
 
 
-INFER_LABELS = ["Alto Saxophone 1", "Tenor Saxophone 1", "Trumpet in Bb 1", "Trombone 1", "Piano", "Drums"]
-INFER_MARKS = "ABCDE"  # five sections of eight bars: bars 1, 9, 17, 25 and 33
-INFER_BARS = 8
+INFER_WINDS = ["Alto Saxophone 1", "Tenor Saxophone 1", "Baritone Saxophone", "Trumpet in Bb 1", "Trombone 1"]
+INFER_THREE = ["Alto Saxophone 1", "Tenor Saxophone 1", "Trumpet in Bb 1"]
+INFER_RHYTHM = ["Piano", "Drums"]
+INFER_VOCAL = ["Voice Lead F", "Voice Lead M", "Voice bck F"]
+INFER_BARS = 8  # five sections of eight bars: bars 1, 9, 17, 25 and 33
 
 
-def infer_score(music_font: Path, out: Path, marked: str | None = None) -> None:
-    """A score to infer unmarked solos in: marks A to E, eight bars apart, one
-    system each (two to a page), and nothing marked, or, with `marked`, that
-    wording over the Trombone staff at bar 9 (mark B)."""
+def infer_score(
+    music_font: Path, out: Path, winds=INFER_WINDS, marks: str = "ABCDE", marked: str | None = None,
+    twin: bool = False, vocal: bool = False,
+) -> None:
+    """A score to infer unmarked solos in: `marks`, eight bars apart, one system
+    per page, nothing marked. With `marked`, that wording is printed over the
+    last wind's staff at bar 9 (the second mark); with `twin`, the second mark
+    is printed together with another one (both at bar 9); with `vocal`, a female
+    vocal lead starts at bar 1."""
+    labels = [*winds, *INFER_RHYTHM, *(INFER_VOCAL if vocal else [])]
     doc = pymupdf.open()
-    page = None
-    for i, mark in enumerate(INFER_MARKS):
-        if i % 2 == 0:
-            page = doc.new_page(width=612, height=792)
-            if i == 0:
-                page.insert_text((200, 60), "Synthetic Infer Tune", fontname="helv", fontsize=24)
-        top = 150 if i % 2 == 0 else 400
-        texts = [(150, top - 30, str(1 + INFER_BARS * i), 7), (200, top - 45, mark, 12)]
-        if marked and mark == "B":
-            texts.append((350, ys_at(top, 3) - 12, marked, 9))
-        _system(page, top, INFER_LABELS, music_font, texts)
+    for i, mark in enumerate(marks):
+        page = doc.new_page(width=612, height=792)
+        if i == 0:
+            page.insert_text((200, 60), "Synthetic Infer Tune", fontname="helv", fontsize=24)
+        texts = [(150, 120, str(1 + INFER_BARS * i), 7), (200, 105, mark, 12)]
+        if marked and i == 1:
+            texts.append((350, ys_at(150, len(winds) - 1) - 12, marked, 9))
+        if twin and i == 1:
+            texts.append((260, 105, "F", 12))
+        if vocal and i == 0:
+            texts += [(300, ys_at(150, len(labels) - 3) - 18, "Female Lead Verse 1", 9), (300, ys_at(150, len(labels) - 3) - 12, "solo", 9)]
+        _system(page, 150, labels, music_font, texts)
     doc.save(out)
 
 
 def infer_part(glyph_font: Path, out: Path, plan: str) -> None:
     """A part for inferring solos: one staff per section A to E (`plan`, a letter
-    each: p = eight bars played, r = an eight-bar multi-bar rest, x = the section
-    is left out), its first bar number and its mark printed at the start."""
+    each), its first bar number and its mark printed at the start. p = eight bars
+    played; r = an eight-bar multi-bar rest; h = three bars played, then a five-bar
+    rest; u = only a five-bar rest, so the part's bars cover five of the eight."""
     doc = pymupdf.open()
     page = None
-    row = 0
-    for i, (mark, kind) in enumerate(zip(INFER_MARKS, plan)):
-        if kind == "x":
-            continue
-        if row % 4 == 0:
+    for i, (mark, kind) in enumerate(zip("ABCDE", plan)):
+        if i % 4 == 0:
             page = doc.new_page(width=612, height=792)
-        top = PART_STAFF_TOP + 150 * (row % 4)
-        row += 1
-        xs = (60, 560) if kind == "r" else tuple(60 + 62.5 * k for k in range(INFER_BARS + 1))
+        top = PART_STAFF_TOP + 150 * (i % 4)
         texts = [(50, top - 11, str(1 + INFER_BARS * i), 7), (200, top - 18, mark, 12)]
-        if kind == "r":
-            texts.append((100, top - 5, str(INFER_BARS), 19.5))
+        if kind == "p":
+            xs = tuple(60 + 62.5 * k for k in range(INFER_BARS + 1))
+        elif kind == "h":
+            xs = (60, 220, 320, 400, 560)
+            texts.append((450, top - 5, "5", 19.5))
+        else:
+            xs = (60, 560)
+            texts.append((100, top - 5, "5" if kind == "u" else str(INFER_BARS), 19.5))
         _part_system(page, top, glyph_font, texts, barlines=xs)
     doc.save(out)
 
 
-INFER_PLANS = ["ppppp", "prppp", "pxppp", "rrrrr"]
+INFER_PLANS = ["ppppp", "prppp", "rpppp", "rrrrr", "pprpp", "rrprr", "phppp", "puppp", "rhppp"]
 
 
 def cross_reference_part(glyph_font: Path, out: Path, staves) -> None:
@@ -1465,6 +1476,10 @@ def main() -> None:
         cross_reference_vocal_score(font, OUT / "finale_cross_reference_vocal.pdf")
         infer_score(font, OUT / "finale_infer.pdf")
         infer_score(font, OUT / "finale_infer_marked.pdf", marked="TBN SOLO")
+        infer_score(font, OUT / "finale_infer_twin.pdf", twin=True)
+        infer_score(font, OUT / "finale_infer_three.pdf", winds=INFER_THREE)
+        infer_score(font, OUT / "finale_infer_vocal.pdf", vocal=True)
+        infer_score(font, OUT / "finale_infer_one_mark.pdf", marks="AAAAA")
         for plan in INFER_PLANS:
             infer_part(glyphs, OUT / f"part_infer_{plan}.pdf", plan)
         for name, staves in XREF_PARTS.items():
