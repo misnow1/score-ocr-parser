@@ -28,6 +28,12 @@ def parse_with(tmp_path: Path, parts: dict[str, str], score: Path = SCORE, tune:
     return parse_score(score, ParseOptions(parts_dir=root))
 
 
+def cross_warnings(report) -> list[str]:
+    """The warnings of the cross-reference: those of inferring unmarked solos (#66, tested in
+    test_infer_solos.py) are left out, since a partial parts tree always has missing parts there."""
+    return [w for w in report.warnings if not w.startswith("unmarked solos not inferred")]
+
+
 def named(feature):
     return [(feature.instrument, feature.chair)] + [(p.instrument, p.chair) for p in feature.shared_with]
 
@@ -230,7 +236,7 @@ def test_a_part_solo_matched_across_a_section_boundary_is_warned_about(tmp_path)
 def test_a_part_solo_matched_in_its_own_section_is_not_warned_about(tmp_path):
     report = clarinet(tmp_path, "a15_b20", CLARINET_TWO)
 
-    assert report.warnings == []
+    assert cross_warnings(report) == []
 
 
 def test_a_claim_prefers_the_feature_in_its_own_section_over_the_closest_bar(tmp_path):
@@ -238,7 +244,7 @@ def test_a_claim_prefers_the_feature_in_its_own_section_over_the_closest_bar(tmp
 
     assert any("carried by the Clarinet part" in r for r in at(report, "B")[0].reasons)
     assert not any("carried by" in r for r in at(report, "A")[0].reasons)
-    assert report.warnings == ["the score marks a Clarinet solo (mark A, bar 15) that the Clarinet part does not carry"]
+    assert cross_warnings(report) == ["the score marks a Clarinet solo (mark A, bar 15) that the Clarinet part does not carry"]
 
 
 def test_a_second_solo_of_an_instrument_under_another_mark_is_not_swallowed_by_a_nearby_feature(tmp_path):
@@ -429,7 +435,7 @@ def test_a_part_solo_matches_a_score_feature_whatever_the_wording(tmp_path):
         ("feature", "A", "Clarinet", 15),
         ("feature", "B", "Clarinet", 20),
     ]
-    assert report.warnings == []
+    assert cross_warnings(report) == []
 
 
 def test_a_score_feature_of_another_wording_still_blocks_a_conflicting_addition(tmp_path):

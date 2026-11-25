@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .layout import lines
 from .measures import BAR_ROW_REACH, merge_barlines, page_number_zone, share_barlines
-from .models import Page, Token
+from .models import BarRun, Page, Token
 from .part_labels import START_REACH, StartLabel, bars_in, read_start_labels
 from .staves import Staff
 from .systems import StartNote, System, place_rows
@@ -160,3 +160,24 @@ def _overprint_note(label: StartLabel) -> StartNote:
         f"{said}; not confirmed by counting the staff before from {low} (multi-bar rests included), so the bar may be off",
         False,
     )
+
+
+def bar_runs(systems: list[System]) -> list[BarRun]:
+    """The bars of a part's counted systems in reading order, as runs of
+    consecutive bars that are all played or all rested. A bar is rested when a
+    multi-bar rest covers it. Stacks on one row of bars count once, and a bar
+    the count cannot number is left out (it ends the run)."""
+    runs: list[BarRun] = []
+    seen: set[int] = set()
+    for system in systems:
+        count = system.count
+        if count is None or id(count) in seen:
+            continue
+        seen.add(id(count))
+        for first, bars, rest in count.spans():
+            last = first + bars - 1
+            if runs and runs[-1].rest == rest and runs[-1].last == first - 1:
+                runs[-1].last = last
+            else:
+                runs.append(BarRun(first, last, rest))
+    return runs
