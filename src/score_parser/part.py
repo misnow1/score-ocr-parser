@@ -18,8 +18,8 @@ from .clean import clean
 from .data import load
 from .features import features_in
 from .instruments import Resolved, Roster, present_as, resolve
-from .models import InstrumentFrom, PageInfo, ParseOptions, PartInfo, PartReport, SlotRelation
-from .part_systems import find_part_systems
+from .models import BarRun, InstrumentFrom, PageInfo, ParseOptions, PartInfo, PartReport, SlotRelation
+from .part_systems import bar_runs, find_part_systems
 from .source import read_pages, scan_warnings
 from .title import clean_filename
 
@@ -145,6 +145,7 @@ def read_part_info(path: Path) -> tuple[PartInfo, str]:
         note = _chair_note(slot, folder, chairs)
     info = PartInfo(
         hit.name, chairs, source, folder, slot.name if slot else None, relation, note,
+        slot_chairs=slot.chairs if slot and slot.chairs_given else [],
         also=[p.name for p in hit.also],
     )
     return info, title
@@ -168,6 +169,7 @@ def parse_part(
     for page in pages:
         warnings += scan_warnings(page)
     features = []
+    bars: list[BarRun] = []
     if info.instrument:
         roster = Roster({info.instrument: set(info.chairs) or {1}})
         label = _label(info.instrument, info.chairs)
@@ -177,6 +179,7 @@ def parse_part(
             warnings.append("no staves found: the part has no drawn staff lines to read solos from")
         features, found = features_in(systems, roster)
         warnings += found
+        bars = bar_runs(systems)
     return PartReport(
-        title, info, features, [PageInfo.from_page(p) for p in pages], warnings, file=f"{path.parent.name}/{path.name}"
+        title, info, features, [PageInfo.from_page(p) for p in pages], warnings, file=f"{path.parent.name}/{path.name}", bars=bars
     )

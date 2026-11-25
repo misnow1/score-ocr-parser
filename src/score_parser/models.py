@@ -230,11 +230,23 @@ class PartInfo:
     relation: SlotRelation = "unknown"
     note: str = ""  # "player slot alto-sax-1 (Alto Sax) plays Clarinet" for a doubling
     also: list[str] = field(default_factory=list)  # further instruments of a combined name ("KeyboardSynth")
+    slot_chairs: list[int] = field(default_factory=list)  # the chairs the folder names ("trumpet-3": [3]); none when it names none
+
+
+@dataclass
+class BarRun:
+    """Consecutive bars of a part that are all played or all inside multi-bar
+    rests (`rest`), as the part prints them: the bars `first` to `last`."""
+
+    first: int
+    last: int
+    rest: bool
 
 
 @dataclass
 class PartReport:
-    """The report of one part file: its instrument and chairs, and its solos."""
+    """The report of one part file: its instrument and chairs, its solos and the
+    bars it plays and rests."""
 
     title: str
     part: PartInfo
@@ -242,6 +254,9 @@ class PartReport:
     pages: list[PageInfo] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     file: str = ""  # "<player slot folder>/<file name>": where the part was read from
+    # In reading order. A bar a multi-bar rest covers is a rest; every other bar is played, though a
+    # single bar of silence is not marked in a part, so "played" means "not inside a multi-bar rest".
+    bars: list[BarRun] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)

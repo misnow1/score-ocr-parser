@@ -30,3 +30,4 @@ The folder and the file do not always agree. A Clarinet part in the alto 1 folde
 - A part can name a soloist the score only marks as an open solo or a shared feature. The score still decides the section and the order.
 - A real misfile can put a solo on the wrong player until the planner metadata arrives. That is accepted over guessing.
 - This repo never builds or fills the `parts/` tree. It reads a part from where the planner repo keeps it.
+- Parts also show who rests. A solo that no part and no score marks can be inferred from one wind playing while the others rest; that is a separate, low-confidence rule (ADR 0006).

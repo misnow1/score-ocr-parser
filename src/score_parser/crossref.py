@@ -114,11 +114,11 @@ def _is_vocal(part: PartReport) -> bool:
     return _vocal_name(info.instrument) or (info.relation == "doubling" and _vocal_name(info.slot_instrument))
 
 
-def _names(part: PartReport) -> list[str]:
+def part_names(part: PartReport) -> list[str]:
     return [n for n in (part.part.instrument, *part.part.also) if n]
 
 
-def _readable(part: PartReport) -> bool:
+def is_readable(part: PartReport) -> bool:
     return bool(part.part.instrument) and not any(w.startswith(_UNREADABLE) for w in part.warnings)
 
 
@@ -207,6 +207,13 @@ def _mark_bands(claims: list[Claim]) -> None:
                 c.band = True
 
 
+def insert_in_score_order(features: list[Feature], f: Feature) -> None:
+    """Put a feature a part showed into the score's features in score order
+    (ADR 0003): by page, then bar; a feature with no bar follows the barred ones on its page."""
+    after = [i for i, g in enumerate(features) if (g.page, g.bar is None, g.bar or 0) <= (f.page, False, f.bar or 0)]
+    features.insert(after[-1] + 1 if after else 0, f)
+
+
 @dataclass
 class _CrossReference:
     features: list[Feature]
@@ -244,7 +251,7 @@ class _CrossReference:
     def plausible(self, c: Claim) -> bool:
         info = c.part.part
         slot = [info.slot_instrument] if info.relation == "doubling" and info.slot_instrument else []
-        return any(present_as(n, self.known) for n in [*_names(c.part), *slot])
+        return any(present_as(n, self.known) for n in [*part_names(c.part), *slot])
 
     def is_open(self, f: Feature) -> bool:
         return id(f) in self.original and f.instrument is None and not f.shared_with
@@ -400,22 +407,17 @@ class _CrossReference:
             chair=who[0].chair if who else None, chair_ambiguous=who[0].chair_ambiguous if who else False,
             shared_with=who[1:] if who else [],
         )
-        # Score order (ADR 0003): by page, then bar; a feature with no bar follows the barred ones on its page.
-        after = [
-            i for i, g in enumerate(self.features)
-            if (g.page, g.bar is None, g.bar or 0) <= (page, False, bar)
-        ]
-        self.features.insert(after[-1] + 1 if after else 0, f)
+        insert_in_score_order(self.features, f)
 
     # -- the whole pass --------------------------------------------------------------
     def claims(self) -> list[Claim]:
         found = []
         for index, part in enumerate(self.parts.parts):
-            if not _readable(part):
+            if not is_readable(part):
                 continue
             own = [
                 f for f in distinct_solos(part.features)
-                if f.kind != "vocal lead" and (f.instrument is None or present_as(f.instrument, _names(part)))
+                if f.kind != "vocal lead" and (f.instrument is None or present_as(f.instrument, part_names(part)))
             ]
             found += [_claim_of(part, index, f, _noise(own)) for f in own]
         for c in found:
@@ -443,10 +445,10 @@ class _CrossReference:
     def cues(self) -> None:
         """A '<X> solo' cue printed in another part supports X's feature."""
         for part in self.parts.parts:
-            if not _readable(part):
+            if not is_readable(part):
                 continue
             for f in distinct_solos(part.features):
-                if f.kind == "vocal lead" or f.instrument is None or present_as(f.instrument, _names(part)):
+                if f.kind == "vocal lead" or f.instrument is None or present_as(f.instrument, part_names(part)):
                     continue
                 for feature in self.features:
                     if (
@@ -466,7 +468,7 @@ class _CrossReference:
             for p in self.base(f):
                 present = [
                     i for i, part in enumerate(self.parts.parts)
-                    if _readable(part) and present_as(p.instrument, _names(part))
+                    if is_readable(part) and present_as(p.instrument, part_names(part))
                     and (p.chair is None or not part.part.chairs or p.chair in part.part.chairs)
                 ]
                 if present and not set(present) & self.carried.get(id(f), set()):

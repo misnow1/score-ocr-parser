@@ -6,6 +6,7 @@ from .clean import clean
 from .crossref import cross_reference
 from .features import find_features_and_marks
 from .flow import build_flow
+from .infer import infer_unmarked_solos
 from .instruments import build_instrumentation, vocabulary_hits
 from .matching import draft_name, match_slug
 from .models import PageInfo, ParseOptions, PartReport, ScoreReport
@@ -39,6 +40,8 @@ def parse_score(path: str | Path, options: ParseOptions | None = None) -> ScoreR
         warnings += parts_warnings(parts)
         features, cross_warnings = cross_reference(features, parts, score_map, instrumentation.entries)
         warnings += cross_warnings
+        features, infer_warnings = infer_unmarked_solos(features, parts, score_map, instrumentation.entries)
+        warnings += infer_warnings
     slug = match_slug(title, Path(options.numbers_dir)) if options.numbers_dir else None
     name, unmatched = draft_name(title, slug, options.numbers_dir)
     return ScoreReport(

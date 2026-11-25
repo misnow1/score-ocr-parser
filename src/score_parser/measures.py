@@ -172,6 +172,25 @@ class BarCount:
     def in_first_bar(self, x: float) -> bool:
         return _interval(self.barlines, x) == 0
 
+    def spans(self) -> list[tuple[int, int, bool]]:
+        """(first bar, bars, whether it is a multi-bar rest) of each interval of
+        the row, in order. An interval that cannot be numbered is left out."""
+        found = []
+        for i in range(len(self.barlines) - 1):
+            first = self._first_bar(i)
+            if first is not None:
+                found.append((first, self.skipped.get(i, 0) + 1, i in self.skipped))
+        return found
+
+    def _first_bar(self, i: int) -> int | None:
+        if self.anchors:
+            before = [a for a in self.anchors if a[0] <= i]
+            idx, number = before[-1] if before else self.anchors[0]
+            return number + (i - idx) + self._extra_before(i) - self._extra_before(idx)
+        if self.carried is not None:
+            return self.carried + i + self._extra_before(i)
+        return None
+
     @property
     def bar_count(self) -> int:
         return self.bars_after(0)
