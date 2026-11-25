@@ -18,6 +18,7 @@ Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agen
 - Add CI (GitHub Actions) as tests are developed, and extend it as new test kinds arrive (for example macOS-only OCR tests need a macOS runner). Corpus tests stay opt-in and are never run in CI, because the scores can't be committed.
 - Flow sheet priority: section and feature order matter more than exact bar numbers. The flow sheet needs each feature's section (verse, chorus, bridge, from the rehearsal mark) and the order of features within a section. An off-by-one bar that keeps order and section intact is not a blocker; do not chase it. Prefer corpus facts that assert order and section.
 - Review on a stronger model: run the review step (code review of a PR or a range) on at least an Opus-class agent, not the implementers' default model, because a same-model review misses what the implementer's model also misses. Implementers and fixers use the normal model. State which model reviewed in the report.
+- Where to pick up: start from issue #14 (the corpus review, with its latest status comment and its open sub-issues) and the "Decisions waiting for the user" issue. Work one small PR per ticket from `main`, test-first through `parse_score`/`parse_part` on synthetic fixtures; read real scores and parts in place only (`SCORE_CORPUS_DIR`, `SCORE_PARTS_DIR`, stdout only). Record corpus facts in `tests/corpus/expected.yaml` only after the user approves them.
 
 ## Licensing
 
